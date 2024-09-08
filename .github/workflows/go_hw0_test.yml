@@ -1,0 +1,69 @@
+name: HW0_tests
+
+on:
+  push
+
+jobs:
+  tests:
+    runs-on:
+      group: runners_v1
+    env:
+      LLVL: trace
+    steps:
+      - name: Use Go = 1.23
+        uses: actions/setup-go@v3
+        with:
+          go-version: '=1.23'
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Install gotestfmt on the VM running the action.
+      - name: Set up gotestfmt
+        uses: gotesttools/gotestfmt-action@v2
+        with:
+          # Pass GITHUB_TOKEN to avoid rate limiting.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create temp directory
+        run: |
+          mkdir -p ./${{ github.run_attempt }}
+
+      # Run tests with nice formatting
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          go test -json -timeout 5m -v -race -run Test_HW0 ./peer/tests/unit 2>&1 | tee ./${{ github.run_attempt }}/gotest-unit.log | gotestfmt
+
+      - name: Run integration tests
+        # Run integration tests even if the unit tests failed
+        # But we don't use 'always()' as we don't want to run this if the build is cancelled
+        if: success() || failure()
+        run: |
+          set -euo pipefail
+          go test -json -timeout 20m -v -race -run Test_HW0 ./peer/tests/integration 2>&1 | tee ./${{ github.run_attempt }}/gotest-inte.log | gotestfmt
+
+      # Upload formatted logs
+      - name: Upload unit test log
+        uses: actions/upload-artifact@v2
+        with:
+          name: unit-test-hw0-log
+          path: ./${{ github.run_attempt }}/gotest-unit.log
+          if-no-files-found: error
+
+      - name: Upload integration test log
+        uses: actions/upload-artifact@v2
+        with:
+          name: integration-test-hw0-log
+          path: ./${{ github.run_attempt }}/gotest-inte.log
+          if-no-files-found: error

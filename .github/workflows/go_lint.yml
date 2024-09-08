@@ -1,0 +1,27 @@
+name: Go lint
+
+on:
+  push:
+
+jobs:
+  lint:
+    runs-on:
+      group: runners_v1
+    steps:
+      - name: Use Go = 1.23
+        uses: actions/setup-go@v3
+        with:
+          go-version: '=1.23'
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Tidy
+        run: go mod tidy && [ -z "$(git status -s)" ]
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
