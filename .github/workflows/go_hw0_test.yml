@@ -55,14 +55,14 @@ jobs:
 
       # Upload formatted logs
       - name: Upload unit test log
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: unit-test-hw0-log
           path: ./${{ github.run_attempt }}/gotest-unit.log
           if-no-files-found: error
 
       - name: Upload integration test log
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: integration-test-hw0-log
           path: ./${{ github.run_attempt }}/gotest-inte.log
