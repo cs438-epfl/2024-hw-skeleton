@@ -80,13 +80,22 @@ func (n *node) Start() error {
 }
 
 func (n *node) processPacket(pkt transport.Packet) error {
+	const timeout = 5 * time.Second
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
 	} else {
 		// Packet needs to be relayed
+		n.routingMutex.RLock()
+		nextHop, known := n.routingTable[pkt.Header.Destination]
+		n.routingMutex.RUnlock()
+
+		if !known {
+			return errors.New("unknown destination for relay")
+		}
+
 		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-		return n.conf.Socket.Send(pkt.Header.Destination, pkt, time.Second*5)
+		return n.conf.Socket.Send(nextHop, pkt, timeout)
 	}
 }
 
@@ -106,9 +115,17 @@ func (n *node) Stop() error {
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
+	n.routingMutex.RLock()
+	_, known := n.routingTable[dest]
+	n.routingMutex.RUnlock()
+
+	if !known {
+		return errors.New("unknown destination")
+	}
+
 	header := transport.NewHeader(
 		n.conf.Socket.GetAddress(),
-		n.conf.Socket.GetAddress(), //same as source ?
+		n.conf.Socket.GetAddress(), // same as source?
 		dest,
 	)
 
@@ -117,7 +134,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	const sendTimeout = 5 * time.Second //timeout, maybe add as parameter?
+	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
 
 	return n.conf.Socket.Send(dest, pkt, sendTimeout)
 }
