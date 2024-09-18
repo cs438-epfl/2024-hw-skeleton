@@ -8,7 +8,7 @@ import (
 	"go.dedis.ch/cs438/transport"
 )
 
-// It is advised to define a constant (max) size for all relevant byte buffers, e.g:
+// It is advised to define a constant (max) size all relevant byte buffers, e.g:
 const bufSize = 65000
 
 // NewUDP returns a new udp transport implementation.
@@ -18,7 +18,7 @@ func NewUDP() transport.Transport {
 
 // UDP implements a transport layer using UDP
 //
-// - implements transport.Transport
+// - transport.Transport
 type UDP struct {
 	address string
 	conn    *net.UDPConn
@@ -42,12 +42,13 @@ func (n *UDP) CreateSocket(address string) (transport.ClosableSocket, error) {
 	n.address = conn.LocalAddr().String()
 	n.conn = conn
 
-	// Return the new Socket instance
+	// Return new Socket instance
 	return &Socket{
 		conn:    conn,
 		address: n.address,
 		ins:     make([]transport.Packet, 0),
 		outs:    make([]transport.Packet, 0),
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -60,9 +61,7 @@ type Socket struct {
 	address string
 	ins     []transport.Packet
 	outs    []transport.Packet
-
-	mu *sync.Mutex //added mutex to protect ins and outs
-
+	mu      *sync.Mutex
 }
 
 // Close implements transport.Socket. It returns an error if already closed.
@@ -84,7 +83,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	// Set the write deadline
+	// Set the write
 	if timeout > 0 {
 		s.conn.SetWriteDeadline(time.Now().Add(timeout))
 	} else {
@@ -101,7 +100,9 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	}
 
 	// Store the sent packet
+	s.mu.Lock()
 	s.outs = append(s.outs, pkt)
+	s.mu.Unlock()
 
 	return nil
 }
@@ -116,7 +117,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	if timeout > 0 {
 		s.conn.SetReadDeadline(time.Now().Add(timeout))
 	} else {
-		s.conn.SetDeadline(time.Time{})
+		s.conn.SetReadDeadline(time.Time{})
 	}
 
 	// Receive the packet
@@ -136,9 +137,9 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	}
 
 	// Store the received packet
-	//s.mu.Lock()
+	s.mu.Lock()
 	s.ins = append(s.ins, pkt)
-	//s.mu.Unlock()
+	s.mu.Unlock()
 
 	return pkt, nil
 }
@@ -152,10 +153,14 @@ func (s *Socket) GetAddress() string {
 
 // GetIns implements transport.Socket
 func (s *Socket) GetIns() []transport.Packet {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.ins
 }
 
 // GetOuts implements transport.Socket
 func (s *Socket) GetOuts() []transport.Packet {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.outs
 }
