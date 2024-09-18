@@ -14,9 +14,17 @@ import (
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
-	// here you must return a struct that implements the peer.Peer functions.
-	// Therefore, you are free to rename and change it as you want.
-	return &node{}
+	n := &node{
+		conf:         conf,
+		routingTable: make(peer.RoutingTable),
+	}
+	// Initialize the routing table with an entry to itself
+	n.routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
+
+	// Register the callback for ChatMessage
+	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.chatMessageCallback)
+
+	return n
 }
 
 // node implements a peer to build a Peerster system
@@ -29,6 +37,10 @@ type node struct {
 	socket   transport.ClosableSocket
 	stopChan chan struct{}
 	wg       sync.WaitGroup
+
+	// Add routing table and mutex for part 2
+	routingTable peer.RoutingTable
+	routingMutex sync.RWMutex
 }
 
 // Start implements peer.Service
@@ -68,32 +80,14 @@ func (n *node) Start() error {
 }
 
 func (n *node) processPacket(pkt transport.Packet) error {
-	// First, unmarshal the message
-	var msg types.Message
-	// Define a constant for the timeout duration
-	const sendTimeout = 5 * time.Second // You can adjust this value as needed
-
-	err := n.conf.MessageRegistry.UnmarshalMessage(pkt.Msg, msg)
-	if err != nil {
-		return err
-	}
-
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
-		err = n.conf.MessageRegistry.ProcessPacket(pkt)
-		if err != nil {
-			return err
-		}
+		return n.conf.MessageRegistry.ProcessPacket(pkt)
 	} else {
 		// Packet needs to be relayed
 		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-		err := n.conf.Socket.Send(pkt.Header.Destination, pkt, sendTimeout)
-		if err != nil {
-			return err
-		}
+		return n.conf.Socket.Send(pkt.Header.Destination, pkt, time.Second*5)
 	}
-
-	return nil
 }
 
 // Stop implements peer.Service
@@ -112,20 +106,66 @@ func (n *node) Stop() error {
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	panic("to be implemented in HW0")
+	header := transport.NewHeader(
+		n.conf.Socket.GetAddress(),
+		n.conf.Socket.GetAddress(), //same as source ?
+		dest,
+	)
+
+	pkt := transport.Packet{
+		Header: &header,
+		Msg:    &msg,
+	}
+
+	const sendTimeout = 5 * time.Second //timeout, maybe add as parameter?
+
+	return n.conf.Socket.Send(dest, pkt, sendTimeout)
 }
 
 // AddPeer implements peer.Messaging
 func (n *node) AddPeer(addr ...string) {
-	panic("to be implemented in HW0")
+	n.routingMutex.Lock()
+	defer n.routingMutex.Unlock()
+
+	for _, a := range addr {
+		if a != n.conf.Socket.GetAddress() {
+			n.routingTable[a] = a
+		}
+	}
 }
 
 // GetRoutingTable implements peer.Messaging
 func (n *node) GetRoutingTable() peer.RoutingTable {
-	panic("to be implemented in HW0")
+	n.routingMutex.RLock()
+	defer n.routingMutex.RUnlock()
+
+	copy := make(peer.RoutingTable)
+	for k, v := range n.routingTable {
+		copy[k] = v
+	}
+	return copy
 }
 
 // SetRoutingEntry implements peer.Messaging
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	panic("to be implemented in HW0")
+	n.routingMutex.Lock()
+	defer n.routingMutex.Unlock()
+
+	if relayAddr == "" {
+		delete(n.routingTable, origin)
+	} else {
+		n.routingTable[origin] = relayAddr
+	}
+}
+
+// chatMessageCallback handles incoming ChatMessage
+func (n *node) chatMessageCallback(msg types.Message, pkt transport.Packet) error {
+	chatMsg, ok := msg.(*types.ChatMessage)
+	if !ok {
+		return errors.New("invalid message type")
+	}
+
+	log.Printf("Received chat message: %s", chatMsg.String())
+	log.Printf("From: %s", pkt.Header.Source)
+	return nil
 }
