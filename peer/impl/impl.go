@@ -156,7 +156,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 */
 
 func (n *node) processPacket(pkt transport.Packet) error {
-	log.Printf("Processing packet: %+v", pkt)
+	log.Printf("Processing packet: %+v from %s", pkt, n.conf.Socket.GetAddress())
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
 		log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
@@ -173,7 +173,7 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		}
 
 		log.Printf("Relaying packet to next hop: %s", nextHop)
-		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+		pkt.Header.RelayedBy = nextHop
 		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
 	}
 }
@@ -203,7 +203,13 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
 
 	log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
-	return n.conf.Socket.Send(dest, pkt, sendTimeout)
+	if nextHop == dest {
+		// Directly send to the destination
+		return n.conf.Socket.Send(dest, pkt, sendTimeout)
+	} else {
+		// Relay through the next hop
+		return n.conf.Socket.Send(nextHop, pkt, sendTimeout)
+	}
 }
 
 // AddPeer implements peer.Messaging
