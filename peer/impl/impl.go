@@ -110,7 +110,7 @@ func (n *node) processPacket(pkt transport.Packet) error {
 	log.Printf("Processing packet relayed by: %+v from %s", pkt.Header.RelayedBy, n.conf.Socket.GetAddress())
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
-		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
 		log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
 	} else {
@@ -159,7 +159,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
 	if nextHop == dest {
 		// Directly send to the destination
-		pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
+		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
 
 		return n.conf.Socket.Send(dest, pkt, sendTimeout)
 	} else {

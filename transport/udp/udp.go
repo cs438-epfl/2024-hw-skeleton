@@ -160,7 +160,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	log.Printf("Received packet: %+v from %s", pkt, s.GetAddress())
 	log.Printf("s.ins before append in udp: %+v", s.ins)
 
-	pkt.Header.RelayedBy = s.address
+	//pkt.Header.RelayedBy = s.address
 
 	// Store the received packet
 	s.mu.Lock()
