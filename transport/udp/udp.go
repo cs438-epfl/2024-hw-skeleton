@@ -80,7 +80,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	log.Printf("sending in udp to address : %s", udpAddr)
+	log.Print("pkt header relayed by before udp send: %s vs %s vs %s", pkt.Header.RelayedBy, s.GetAddress(), s.address)
 
 	// Marshal the packet to bytes
 	data, err := pkt.Marshal()
@@ -88,17 +88,6 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		log.Printf("Send error: failed to marshal packet: %v", err)
 		return err
 	}
-
-	/*
-		// Set the Source and RelayedBy fields
-		// If the Source field is empty, set it to the current address
-		if pkt.Header.Source == "" {
-			pkt.Header.Source = s.address
-		}
-
-		// Set the RelayedBy field to the current address
-		pkt.Header.RelayedBy = s.address
-	*/
 
 	// Set the write
 	if timeout > 0 {
@@ -120,6 +109,9 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 
 	log.Printf("Received packet: %+v from %s", pkt, s.address)
 	log.Printf("s.outs before append in udp: %+v", s.outs)
+
+	//Maybe we should set the relayed by to the address of the sender in some cases ? last tes runs to line 554 of tests as of 21/09/2024
+	pkt.Header.RelayedBy = pkt.Header.Source
 
 	// Store the sent packet
 	s.mu.Lock()
@@ -159,15 +151,16 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 
 	// Unmarshal the packet
 	var pkt transport.Packet
+
 	err = pkt.Unmarshal(buf[:n])
 	if err != nil {
 		log.Printf("Unmarshal error: %v", err)
 		return transport.Packet{}, err
 	}
-	log.Printf("Received packet: %+v from %s", pkt, s.address)
+	log.Printf("Received packet: %+v from %s", pkt, s.GetAddress())
 	log.Printf("s.ins before append in udp: %+v", s.ins)
 
-	//pkt.Header.RelayedBy = s.address
+	//pkt.Header.RelayedBy = s.conn.LocalAddr().String()
 
 	// Store the received packet
 	s.mu.Lock()
