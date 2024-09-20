@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -74,12 +75,14 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	// Resolve the destination address
 	udpAddr, err := net.ResolveUDPAddr("udp", dest)
 	if err != nil {
+		log.Printf("Send error: failed to resolve address %s: %v", dest, err)
 		return err
 	}
 
 	// Marshal the packet to bytes
 	data, err := pkt.Marshal()
 	if err != nil {
+		log.Printf("Send error: failed to marshal packet: %v", err)
 		return err
 	}
 
@@ -94,15 +97,22 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	_, err = s.conn.WriteToUDP(data, udpAddr)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Printf("Send timeout: %v", timeout)
 			return transport.TimeoutError(timeout)
 		}
+		log.Printf("Send error: %v", err)
 		return err
 	}
+
+	log.Printf("Received packet: %+v", pkt)
+	log.Printf("s.ins in udp: %+v", s.outs)
 
 	// Store the sent packet
 	s.mu.Lock()
 	s.outs = append(s.outs, pkt)
 	s.mu.Unlock()
+
+	log.Printf("Sent packet: %+v to %s", pkt, dest)
 
 	return nil
 }
@@ -124,8 +134,10 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	n, _, err := s.conn.ReadFromUDP(buf)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Printf("Recv timeout: %v", timeout)
 			return transport.Packet{}, transport.TimeoutError(timeout)
 		}
+		log.Printf("Recv error: %v", err)
 		return transport.Packet{}, err
 	}
 
@@ -133,13 +145,18 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	var pkt transport.Packet
 	err = pkt.Unmarshal(buf[:n])
 	if err != nil {
+		log.Printf("Unmarshal error: %v", err)
 		return transport.Packet{}, err
 	}
+	log.Printf("Received packet: %+v", pkt)
+	log.Printf("s.ins in udp: %+v", s.ins)
 
 	// Store the received packet
 	s.mu.Lock()
 	s.ins = append(s.ins, pkt)
 	s.mu.Unlock()
+
+	log.Printf("Received packet: %+v", pkt)
 
 	return pkt, nil
 }
@@ -154,7 +171,9 @@ func (s *Socket) GetAddress() string {
 // GetIns implements transport.Socket
 func (s *Socket) GetIns() []transport.Packet {
 	s.mu.Lock()
+	//s.ins = append([]transport.Packet{}, s.ins...)
 	defer s.mu.Unlock()
+	log.Printf("Get  Ins: %+v", s.ins)
 	return s.ins
 }
 
@@ -162,5 +181,6 @@ func (s *Socket) GetIns() []transport.Packet {
 func (s *Socket) GetOuts() []transport.Packet {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	log.Printf("Get  Outs: %+v", s.outs)
 	return s.outs
 }

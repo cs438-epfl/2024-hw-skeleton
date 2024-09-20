@@ -3,6 +3,7 @@ package unit
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"sort"
 	"sync"
 	"testing"
@@ -508,8 +509,14 @@ func Test_HW0_Messaging_Relaying(t *testing.T) {
 			n1Outs := node1.GetOuts()
 			n1Ins := node1.GetIns()
 
+			log.Printf("n1Ins: %s", n1Ins)
+			log.Printf("n1Outs: %s", n1Outs)
+
 			n2Outs := node2.GetOuts()
 			n2Ins := node2.GetIns()
+
+			log.Printf("n2Ins: %s", n2Ins)
+			log.Printf("n2Outs: %s", n2Outs)
 
 			n3Outs := node3.GetOuts()
 			n3Ins := node3.GetIns()

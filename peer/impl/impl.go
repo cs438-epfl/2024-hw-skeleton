@@ -14,17 +14,30 @@ import (
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
-	n := &node{
-		conf:         conf,
+
+	// Initialize the async routing table
+	asyncRoutingTable := AsyncRoutingTable{
 		routingTable: make(peer.RoutingTable),
 	}
+
+	log.Printf("Creating new peer with address: %s", conf.Socket.GetAddress())
+
+	n := &node{
+		conf:              conf,
+		asyncRoutingTable: asyncRoutingTable,
+	}
 	// Initialize the routing table with an entry to itself
-	n.routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
+	n.asyncRoutingTable.routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
 
 	// Register the callback for ChatMessage
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.chatMessageCallback)
 
 	return n
+}
+
+type AsyncRoutingTable struct {
+	routingTable peer.RoutingTable
+	mutex        sync.RWMutex
 }
 
 // node implements a peer to build a Peerster system
@@ -34,13 +47,13 @@ type node struct {
 	peer.Peer
 	// You probably want to keep the peer.Configuration on this struct:
 	conf     peer.Configuration
-	socket   transport.ClosableSocket
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 
 	// Add routing table and mutex for part 2
-	routingTable peer.RoutingTable
-	routingMutex sync.RWMutex
+	routingTable      peer.RoutingTable
+	routingMutex      sync.RWMutex
+	asyncRoutingTable AsyncRoutingTable
 }
 
 // Start implements peer.Service
@@ -79,8 +92,8 @@ func (n *node) Start() error {
 	return nil
 }
 
+/*
 func (n *node) processPacket(pkt transport.Packet) error {
-	const timeout = 5 * time.Second
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
@@ -95,9 +108,10 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		}
 
 		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-		return n.conf.Socket.Send(nextHop, pkt, timeout)
+		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
 	}
 }
+*/
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
@@ -113,6 +127,7 @@ func (n *node) Stop() error {
 	return nil
 }
 
+/*
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
 	n.routingMutex.RLock()
@@ -138,40 +153,94 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	return n.conf.Socket.Send(dest, pkt, sendTimeout)
 }
+*/
+
+func (n *node) processPacket(pkt transport.Packet) error {
+	log.Printf("Processing packet: %+v", pkt)
+	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+		// The packet is for this node
+		log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
+		return n.conf.MessageRegistry.ProcessPacket(pkt)
+	} else {
+		// Packet needs to be relayed
+		n.asyncRoutingTable.mutex.RLock()
+		nextHop, known := n.asyncRoutingTable.routingTable[pkt.Header.Destination]
+		n.asyncRoutingTable.mutex.RUnlock()
+
+		if !known {
+			log.Printf("Unknown destination for relay: %s", pkt.Header.Destination)
+			return errors.New("unknown destination for relay")
+		}
+
+		log.Printf("Relaying packet to next hop: %s", nextHop)
+		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
+	}
+}
+
+func (n *node) Unicast(dest string, msg transport.Message) error {
+	log.Printf("Unicasting message to: %s", dest)
+	n.asyncRoutingTable.mutex.RLock()
+	nextHop, known := n.asyncRoutingTable.routingTable[dest]
+	n.asyncRoutingTable.mutex.RUnlock()
+
+	if !known {
+		log.Printf("Unknown destination: %s", dest)
+		return errors.New("unknown destination")
+	}
+
+	header := transport.NewHeader(
+		n.conf.Socket.GetAddress(),
+		n.conf.Socket.GetAddress(), // same as source?
+		dest,
+	)
+
+	pkt := transport.Packet{
+		Header: &header,
+		Msg:    &msg,
+	}
+
+	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
+
+	log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
+	return n.conf.Socket.Send(dest, pkt, sendTimeout)
+}
 
 // AddPeer implements peer.Messaging
 func (n *node) AddPeer(addr ...string) {
-	n.routingMutex.Lock()
-	defer n.routingMutex.Unlock()
+	n.asyncRoutingTable.mutex.Lock()
+	defer n.asyncRoutingTable.mutex.Unlock()
 
 	for _, a := range addr {
 		if a != n.conf.Socket.GetAddress() {
-			n.routingTable[a] = a
+			n.asyncRoutingTable.routingTable[a] = a
 		}
 	}
 }
 
 // GetRoutingTable implements peer.Messaging
 func (n *node) GetRoutingTable() peer.RoutingTable {
-	n.routingMutex.RLock()
-	defer n.routingMutex.RUnlock()
+	n.asyncRoutingTable.mutex.RLock()
+	defer n.asyncRoutingTable.mutex.RUnlock()
 
 	copy := make(peer.RoutingTable)
-	for k, v := range n.routingTable {
+	for k, v := range n.asyncRoutingTable.routingTable {
 		copy[k] = v
 	}
 	return copy
 }
 
-// SetRoutingEntry implements peer.Messaging
+// SetRoutingEntry implements peer.M
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	n.routingMutex.Lock()
-	defer n.routingMutex.Unlock()
+	n.asyncRoutingTable.mutex.Lock()
+	defer n.asyncRoutingTable.mutex.Unlock()
 
 	if relayAddr == "" {
-		delete(n.routingTable, origin)
+		log.Printf("Deleting routing entry for origin: %s", origin)
+		delete(n.asyncRoutingTable.routingTable, origin)
 	} else {
-		n.routingTable[origin] = relayAddr
+		log.Printf("Setting routing entry: origin=%s, relayAddr=%s", origin, relayAddr)
+		n.asyncRoutingTable.routingTable[origin] = relayAddr
 	}
 }
 
