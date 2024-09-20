@@ -111,7 +111,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	log.Printf("s.outs before append in udp: %+v", s.outs)
 
 	//Maybe we should set the relayed by to the address of the sender in some cases ? last tes runs to line 554 of tests as of 21/09/2024
-	pkt.Header.RelayedBy = pkt.Header.Source
+	//pkt.Header.RelayedBy = pkt.Header.Source
 
 	// Store the sent packet
 	s.mu.Lock()
