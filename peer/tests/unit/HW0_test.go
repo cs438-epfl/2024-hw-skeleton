@@ -515,6 +515,11 @@ func Test_HW0_Messaging_Relaying(t *testing.T) {
 			n3Outs := node3.GetOuts()
 			n3Ins := node3.GetIns()
 
+			log.Printf("node 1 address: %s", node1.GetAddr())
+
+			log.Printf("node 2 address: %s", node2.GetAddr())
+			log.Printf("node 3 address: %s", node3.GetAddr())
+
 			// > n1 should have not received any packet
 
 			require.Len(t, n1Ins, 0)
@@ -534,8 +539,6 @@ func Test_HW0_Messaging_Relaying(t *testing.T) {
 
 			require.Len(t, n2Ins, 1)
 			pkt = n2Ins[0]
-
-			log.Printf("n2Ins: %s", n2Ins)
 
 			require.Equal(t, node3.GetAddr(), pkt.Header.Destination)
 

@@ -12,6 +12,9 @@ import (
 // It is advised to define a constant (max) size all relevant byte buffers, e.g:
 const bufSize = 65000
 
+var counterGetOuts = 0
+var counterGetIns = 0
+
 // NewUDP returns a new udp transport implementation.
 func NewUDP() transport.Transport {
 	return &UDP{}
@@ -107,18 +110,18 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	log.Printf("Received packet: %+v from %s", pkt, s.address)
-	log.Printf("s.outs before append in udp: %+v", s.outs)
+	//log.Printf("Received packet: %+v from %s", pkt, s.address)
+	//log.Printf("s.outs before append in udp: %+v", s.outs)
 
 	//Maybe we should set the relayed by to the address of the sender in some cases ? last tes runs to line 554 of tests as of 21/09/2024
-	//pkt.Header.RelayedBy = pkt.Header.Source
+	//pkt.Header.RelayedBy = s.GetAddress()
 
 	// Store the sent packet
 	s.mu.Lock()
 	s.outs = append(s.outs, pkt)
 	s.mu.Unlock()
 
-	log.Printf("s.outs after append in udp: %+v", s.outs)
+	//log.Printf("s.outs after append in udp: %+v", s.outs)
 
 	log.Printf("Sent packet: %+v to %s", pkt, dest)
 
@@ -129,6 +132,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 // the timeout is reached. In the case the timeout is reached, return a
 // TimeoutErr.
 func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
+
 	buf := make([]byte, bufSize)
 
 	// Set the read deadline
@@ -157,19 +161,20 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 		log.Printf("Unmarshal error: %v", err)
 		return transport.Packet{}, err
 	}
-	log.Printf("Received packet: %+v from %s", pkt, s.GetAddress())
-	log.Printf("s.ins before append in udp: %+v", s.ins)
+	//log.Printf("s.ins before append in udp: %+v", s.ins)
 
-	//pkt.Header.RelayedBy = s.address
+	//pkt.Header.RelayedBy = s.GetAddress()
 
 	// Store the received packet
 	s.mu.Lock()
 	s.ins = append(s.ins, pkt)
 	s.mu.Unlock()
 
-	log.Printf("s.ins after append in udp: %+v", s.ins)
+	//log.Printf("s.ins after append in udp: %+v", s.ins)
 
-	log.Printf("Received packet: %+v", pkt)
+	//log.Printf("Received packet: %+v", pkt)
+
+	log.Printf("Received packet line 176: %+v from %s", pkt, s.GetAddress())
 
 	return pkt, nil
 }
@@ -186,14 +191,18 @@ func (s *Socket) GetIns() []transport.Packet {
 	s.mu.Lock()
 	//s.ins = append([]transport.Packet{}, s.ins...)
 	defer s.mu.Unlock()
-	log.Printf("Get  Ins in udp: %+v", s.ins)
+	log.Printf("Get  Ins in udp with: %+v from node %+v with counter %d", s.ins, s.conn.LocalAddr(), counterGetIns)
+	counterGetIns++
 	return s.ins
 }
 
 // GetOuts implements transport.Socket
 func (s *Socket) GetOuts() []transport.Packet {
+	//Test variables
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	log.Printf("Get  Outs in udp: %+v", s.outs)
+	log.Printf("Get  Outs in udp: %+v from node %+v with counter %d", s.outs, s.conn.LocalAddr(), counterGetOuts)
+	counterGetOuts++
 	return s.outs
 }

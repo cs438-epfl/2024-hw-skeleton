@@ -79,6 +79,13 @@ func (n *node) Start() error {
 				}
 
 				// Process the packet
+				if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+					log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
+				} else {
+					//adding / removing this line either makes one packet of the test stop at line 540, or makes both stop at line 556
+					//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+				}
+
 				err = n.processPacket(pkt)
 				if err != nil {
 					// Log the error
@@ -113,6 +120,7 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
 		log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
+		//return nil
 	} else {
 		// Packet needs to be relayed
 		n.asyncRoutingTable.mutex.RLock()
@@ -124,8 +132,8 @@ func (n *node) processPacket(pkt transport.Packet) error {
 			return errors.New("unknown destination for relay")
 		}
 
-		log.Printf("Relaying packet to next hop: %s", nextHop)
-		pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+		log.Printf("Relaying packet to next hop: %s from address %s", nextHop, n.conf.Socket.GetAddress())
+		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
 		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
 	}
 }
@@ -156,15 +164,16 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
 
-	log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
+	//log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
 	if nextHop == dest {
 		// Directly send to the destination
+
 		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
 
 		return n.conf.Socket.Send(dest, pkt, sendTimeout)
 	} else {
 		// Relay through the next hop
-		pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
+		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
 		return n.conf.Socket.Send(nextHop, pkt, sendTimeout)
 	}
 }
