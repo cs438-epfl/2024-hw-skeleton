@@ -15,14 +15,14 @@ import (
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
 
-	// Initialize the async routing table
-	asyncRoutingTable := AsyncRoutingTable{
-		routingTable: make(peer.RoutingTable),
-	}
-
+	// Create a new node
+	// Initialize everything inside the node (including the routing table and its mutex)
 	n := &node{
-		conf:              conf,
-		asyncRoutingTable: asyncRoutingTable,
+		conf: conf,
+		asyncRoutingTable: AsyncRoutingTable{
+			routingTable: make(peer.RoutingTable),
+			mutex:        sync.RWMutex{},
+		},
 	}
 	// Initialize the routing table with an entry to itself
 	n.asyncRoutingTable.routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
@@ -49,8 +49,6 @@ type node struct {
 	wg       sync.WaitGroup
 
 	// Add routing table and mutex for part 2
-	routingTable      peer.RoutingTable
-	routingMutex      sync.RWMutex
 	asyncRoutingTable AsyncRoutingTable
 }
 
@@ -105,30 +103,32 @@ func (n *node) Stop() error {
 }
 
 func (n *node) processPacket(pkt transport.Packet) error {
+	// Check if the packet is for this node
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
-	} else {
-		// Packet needs to be relayed
-		n.asyncRoutingTable.mutex.RLock()
-		nextHop, known := n.asyncRoutingTable.routingTable[pkt.Header.Destination]
-		n.asyncRoutingTable.mutex.RUnlock()
-
-		if !known {
-			return errors.New("unknown destination for relay")
-		}
-
-		newHeader := transport.NewHeader(
-			pkt.Header.Source,
-			n.conf.Socket.GetAddress(),
-			pkt.Header.Destination,
-		)
-		pkt = transport.Packet{
-			Header: &newHeader,
-			Msg:    pkt.Msg,
-		}
-		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
 	}
+
+	//Else Packet needs to be relayed
+	n.asyncRoutingTable.mutex.RLock()
+	nextHop, known := n.asyncRoutingTable.routingTable[pkt.Header.Destination]
+	n.asyncRoutingTable.mutex.RUnlock()
+
+	if !known {
+		return errors.New("unknown destination for relay")
+	}
+
+	newHeader := transport.NewHeader(
+		pkt.Header.Source,
+		n.conf.Socket.GetAddress(),
+		pkt.Header.Destination,
+	)
+	pkt = transport.Packet{
+		Header: &newHeader,
+		Msg:    pkt.Msg,
+	}
+	return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
+
 }
 
 func (n *node) Unicast(dest string, msg transport.Message) error {
@@ -153,12 +153,14 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
 
+	// Check if the destination is the next hop
 	if nextHop == dest {
 		return n.conf.Socket.Send(dest, pkt, sendTimeout)
-	} else {
-		// Relay through the next hop
-		return n.conf.Socket.Send(nextHop, pkt, sendTimeout)
 	}
+
+	//Else Relay through the next hop
+	return n.conf.Socket.Send(nextHop, pkt, sendTimeout)
+
 }
 
 // AddPeer implements peer.Messaging
@@ -178,11 +180,11 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 	n.asyncRoutingTable.mutex.RLock()
 	defer n.asyncRoutingTable.mutex.RUnlock()
 
-	copy := make(peer.RoutingTable)
+	routingTableCopy := make(peer.RoutingTable)
 	for k, v := range n.asyncRoutingTable.routingTable {
-		copy[k] = v
+		routingTableCopy[k] = v
 	}
-	return copy
+	return routingTableCopy
 }
 
 // SetRoutingEntry implements peer.M

@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -87,15 +88,25 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 
 	// Set the write
 	if timeout > 0 {
-		s.conn.SetWriteDeadline(time.Now().Add(timeout))
+		timeouErr := s.conn.SetWriteDeadline(time.Now().Add(timeout))
+		if timeouErr != nil {
+			log.Printf("Error setting write deadline: %v", timeouErr)
+			return transport.TimeoutError(timeout)
+		}
+
 	} else {
-		s.conn.SetWriteDeadline(time.Time{})
+		timeouErr := s.conn.SetWriteDeadline(time.Time{})
+		if timeouErr != nil {
+			log.Printf("Error setting write deadline: %v", timeouErr)
+			return transport.TimeoutError(timeout)
+		}
 	}
 
 	// Send the packet
 	_, err = s.conn.WriteToUDP(data, udpAddr)
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			return transport.TimeoutError(timeout)
 		}
 		return err
@@ -118,15 +129,25 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 
 	// Set the read deadline
 	if timeout > 0 {
-		s.conn.SetReadDeadline(time.Now().Add(timeout))
+		timeoutErr := s.conn.SetReadDeadline(time.Now().Add(timeout))
+		if timeoutErr != nil {
+			log.Printf("Error setting write deadline: %v", timeoutErr)
+			return transport.Packet{}, timeoutErr
+		}
+
 	} else {
-		s.conn.SetReadDeadline(time.Time{})
+		timeoutErr := s.conn.SetReadDeadline(time.Time{})
+		if timeoutErr != nil {
+			log.Printf("Error setting write deadline: %v", timeoutErr)
+			return transport.Packet{}, timeoutErr
+		}
 	}
 
 	// Receive the packet
 	n, _, err := s.conn.ReadFromUDP(buf)
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			log.Printf("Recv timeout: %v", timeout)
 			return transport.Packet{}, transport.TimeoutError(timeout)
 		}
