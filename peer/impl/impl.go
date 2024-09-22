@@ -79,18 +79,48 @@ func (n *node) Start() error {
 				}
 
 				// Process the packet
-				if pkt.Header.Destination == n.conf.Socket.GetAddress() {
-					log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
-				} else {
-					//adding / removing this line either makes one packet of the test stop at line 540, or makes both stop at line 556
-					//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-				}
+				/*
+					if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+						log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
+					} else {
+						//adding / removing this line either makes one packet of the test stop at line 540, or makes both stop at line 556
+						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+					}
+				*/
+
+				//added the process packet function inside the go routine to see
+				/*
+					if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+						// The packet is for this node
+						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+						log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
+						n.conf.MessageRegistry.ProcessPacket(pkt)
+						//return nil
+					} else {
+						// Packet needs to be relayed
+						n.asyncRoutingTable.mutex.RLock()
+						nextHop, known := n.asyncRoutingTable.routingTable[pkt.Header.Destination]
+						n.asyncRoutingTable.mutex.RUnlock()
+
+						if !known {
+							log.Printf("Unknown destination for relay: %s", pkt.Header.Destination)
+							//return errors.New("unknown destination for relay")
+						}
+
+						log.Printf("Relaying packet to next hop: %s from address %s", nextHop, n.conf.Socket.GetAddress())
+						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+						n.conf.Socket.Send(nextHop, pkt, time.Second*5)
+					}
+
+					//end of added code
+				*/
 
 				err = n.processPacket(pkt)
 				if err != nil {
 					// Log the error
 					log.Printf("Error processing packet: %v", err)
 				}
+
 			}
 
 		}
@@ -133,7 +163,15 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		}
 
 		log.Printf("Relaying packet to next hop: %s from address %s", nextHop, n.conf.Socket.GetAddress())
-		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+		newHeader := transport.NewHeader(
+			pkt.Header.Source,
+			n.conf.Socket.GetAddress(),
+			pkt.Header.Destination,
+		)
+		pkt = transport.Packet{
+			Header: &newHeader,
+			Msg:    pkt.Msg,
+		}
 		return n.conf.Socket.Send(nextHop, pkt, time.Second*5)
 	}
 }
