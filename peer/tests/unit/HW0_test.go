@@ -3,7 +3,6 @@ package unit
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"sort"
 	"sync"
 	"testing"
@@ -514,11 +513,6 @@ func Test_HW0_Messaging_Relaying(t *testing.T) {
 
 			n3Outs := node3.GetOuts()
 			n3Ins := node3.GetIns()
-
-			log.Printf("node 1 address: %s", node1.GetAddr())
-
-			log.Printf("node 2 address: %s", node2.GetAddr())
-			log.Printf("node 3 address: %s", node3.GetAddr())
 
 			// > n1 should have not received any packet
 

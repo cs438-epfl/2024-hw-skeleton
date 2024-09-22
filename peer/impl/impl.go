@@ -20,8 +20,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		routingTable: make(peer.RoutingTable),
 	}
 
-	log.Printf("Creating new peer with address: %s", conf.Socket.GetAddress())
-
 	n := &node{
 		conf:              conf,
 		asyncRoutingTable: asyncRoutingTable,
@@ -78,43 +76,6 @@ func (n *node) Start() error {
 					continue
 				}
 
-				// Process the packet
-				/*
-					if pkt.Header.Destination == n.conf.Socket.GetAddress() {
-						log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
-					} else {
-						//adding / removing this line either makes one packet of the test stop at line 540, or makes both stop at line 556
-						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-					}
-				*/
-
-				//added the process packet function inside the go routine to see
-				/*
-					if pkt.Header.Destination == n.conf.Socket.GetAddress() {
-						// The packet is for this node
-						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-						log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
-						n.conf.MessageRegistry.ProcessPacket(pkt)
-						//return nil
-					} else {
-						// Packet needs to be relayed
-						n.asyncRoutingTable.mutex.RLock()
-						nextHop, known := n.asyncRoutingTable.routingTable[pkt.Header.Destination]
-						n.asyncRoutingTable.mutex.RUnlock()
-
-						if !known {
-							log.Printf("Unknown destination for relay: %s", pkt.Header.Destination)
-							//return errors.New("unknown destination for relay")
-						}
-
-						log.Printf("Relaying packet to next hop: %s from address %s", nextHop, n.conf.Socket.GetAddress())
-						//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-						n.conf.Socket.Send(nextHop, pkt, time.Second*5)
-					}
-
-					//end of added code
-				*/
-
 				err = n.processPacket(pkt)
 				if err != nil {
 					// Log the error
@@ -144,13 +105,9 @@ func (n *node) Stop() error {
 }
 
 func (n *node) processPacket(pkt transport.Packet) error {
-	log.Printf("Processing packet relayed by: %+v from %s", pkt.Header.RelayedBy, n.conf.Socket.GetAddress())
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
 		// The packet is for this node
-		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-		log.Printf("Packet is for this node: %s", n.conf.Socket.GetAddress())
 		return n.conf.MessageRegistry.ProcessPacket(pkt)
-		//return nil
 	} else {
 		// Packet needs to be relayed
 		n.asyncRoutingTable.mutex.RLock()
@@ -158,11 +115,9 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		n.asyncRoutingTable.mutex.RUnlock()
 
 		if !known {
-			log.Printf("Unknown destination for relay: %s", pkt.Header.Destination)
 			return errors.New("unknown destination for relay")
 		}
 
-		log.Printf("Relaying packet to next hop: %s from address %s", nextHop, n.conf.Socket.GetAddress())
 		newHeader := transport.NewHeader(
 			pkt.Header.Source,
 			n.conf.Socket.GetAddress(),
@@ -177,17 +132,13 @@ func (n *node) processPacket(pkt transport.Packet) error {
 }
 
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	log.Printf("Unicasting message to: %s", dest)
 	n.asyncRoutingTable.mutex.RLock()
 	nextHop, known := n.asyncRoutingTable.routingTable[dest]
 	n.asyncRoutingTable.mutex.RUnlock()
 
 	if !known {
-		log.Printf("Unknown destination: %s", dest)
 		return errors.New("unknown destination")
 	}
-
-	log.Printf("Routing table entry for %s: %s", dest, nextHop)
 
 	header := transport.NewHeader(
 		n.conf.Socket.GetAddress(),
@@ -202,16 +153,10 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	const sendTimeout = 5 * time.Second // timeout, maybe add as parameter?
 
-	//log.Printf("Sending packet: %+v to next hop: %s", pkt, nextHop)
 	if nextHop == dest {
-		// Directly send to the destination
-
-		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
-
 		return n.conf.Socket.Send(dest, pkt, sendTimeout)
 	} else {
 		// Relay through the next hop
-		//pkt.Header.RelayedBy = n.conf.Socket.GetAddress() // Set RelayedBy to current node's address
 		return n.conf.Socket.Send(nextHop, pkt, sendTimeout)
 	}
 }
@@ -246,10 +191,8 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 	defer n.asyncRoutingTable.mutex.Unlock()
 
 	if relayAddr == "" {
-		log.Printf("Deleting routing entry for origin: %s", origin)
 		delete(n.asyncRoutingTable.routingTable, origin)
 	} else {
-		log.Printf("Setting routing entry: origin=%s, relayAddr=%s", origin, relayAddr)
 		n.asyncRoutingTable.routingTable[origin] = relayAddr
 	}
 }
@@ -260,8 +203,6 @@ func (n *node) chatMessageCallback(msg types.Message, pkt transport.Packet) erro
 	if !ok {
 		return errors.New("invalid message type")
 	}
-
-	log.Printf("Received chat message: %s", chatMsg.String())
-	log.Printf("From: %s", pkt.Header.Source)
+	log.Printf("Received chat message: %s", chatMsg.Message)
 	return nil
 }
