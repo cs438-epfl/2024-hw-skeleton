@@ -74,6 +74,32 @@ func main() {
 						Usage: "addr of the node",
 						Value: "127.0.0.1:0",
 					},
+					&urfave.DurationFlag{
+						Name:  "antientropy",
+						Usage: "Antientropy interval",
+						// 0 means the antientropy is not activated
+						Value: 0,
+					},
+					&urfave.DurationFlag{
+						Name:  "heartbeat",
+						Usage: "Heartbeat interval",
+						// 0 means the heartbeat is not activated
+						Value: 0,
+					},
+					&urfave.DurationFlag{
+						Name:  "acktimeout",
+						Usage: "Timeout of ack message",
+						// this is considered as a reasonable timeout value for
+						// a small system.
+						Value: time.Second * 3,
+					},
+					&urfave.Float64Flag{
+						Name:  "continuemongering",
+						Usage: "probability to continue mongering",
+						// by default there is a 50% chance to continue
+						// mongering.
+						Value: 0.5,
+					},
 				},
 				Action: start,
 			},
@@ -116,6 +142,11 @@ func start(c *urfave.Context) error {
 	conf := peer.Configuration{
 		Socket:          sock,
 		MessageRegistry: standard.NewRegistry(),
+
+		AntiEntropyInterval: c.Duration("antientropy"),
+		HeartbeatInterval:   c.Duration("heartbeat"),
+		AckTimeout:          c.Duration("acktimeout"),
+		ContinueMongering:   c.Float64("continuemongering"),
 	}
 
 	node := peerFactory(conf)

@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/gui/httpnode/types"
 	"go.dedis.ch/cs438/peer"
+
+	"go.dedis.ch/cs438/transport"
 )
 
 // NewMessaging returns a new initialized messaging.
@@ -63,6 +65,22 @@ func (m messaging) UnicastHandler() http.HandlerFunc {
 		switch r.Method {
 		case http.MethodPost:
 			m.unicastPost(w, r)
+		case http.MethodOptions:
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "*")
+			return
+		default:
+			http.Error(w, "forbidden method", http.StatusMethodNotAllowed)
+			return
+		}
+	}
+}
+
+func (m messaging) BroadcastHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			m.broadcastPost(w, r)
 		case http.MethodOptions:
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Headers", "*")
@@ -190,6 +208,32 @@ func (m messaging) unicastPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = m.node.Unicast(res.Dest, res.Msg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+}
+
+func (m messaging) broadcastPost(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+
+	buf, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	m.log.Info().Msgf("broadcast got the following message: %s", buf)
+
+	res := transport.Message{}
+	err = json.Unmarshal(buf, &res)
+	if err != nil {
+		http.Error(w, "failed to unmarshal broadcast argument: "+err.Error(),
+			http.StatusInternalServerError)
+		return
+	}
+
+	err = m.node.Broadcast(res)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}

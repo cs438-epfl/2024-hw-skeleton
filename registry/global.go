@@ -18,6 +18,11 @@ var GlobalRegistry = globalRegistry{
 
 func init() {
 	GlobalRegistry.Add(types.ChatMessage{})
+	GlobalRegistry.Add(types.AckMessage{})
+	GlobalRegistry.Add(types.EmptyMessage{})
+	GlobalRegistry.Add(types.StatusMessage{})
+	GlobalRegistry.Add(types.RumorsMessage{})
+	GlobalRegistry.Add(types.PrivateMessage{})
 }
 
 type globalRegistry struct {

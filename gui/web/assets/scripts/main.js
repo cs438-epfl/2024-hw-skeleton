@@ -18,6 +18,7 @@ const main = function () {
     application.register("unicast", Unicast);
     application.register("routing", Routing);
     application.register("packets", Packets);
+    application.register("broadcast", Broadcast);
 
     initCollapsible();
 };
@@ -422,6 +423,88 @@ class Packets extends BaseElement {
 
     get messagingController() {
         return this.application.getControllerForElementAndIdentifier(document.getElementById("messaging"), "messaging");
+    }
+}
+
+class Broadcast extends BaseElement {
+    static get targets() {
+        return ["chatMessage", "privateMessage", "privateRecipients"];
+    }
+
+    async sendChat() {
+        const addr = this.peerInfo.getAPIURL("/messaging/broadcast");
+
+        const ok = this.checkInputs(this.chatMessageTarget);
+        if (!ok) {
+            return;
+        }
+
+        const message = this.chatMessageTarget.value;
+
+        const msg = {
+            "Type": "chat",
+            "payload": {
+                "Message": message
+            }
+        };
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(msg)
+        };
+
+        try {
+            await this.fetch(addr, fetchArgs);
+            this.flash.printSuccess("chat message broadcasted");
+        } catch (e) {
+            this.flash.printError("failed to send message: " + e);
+        }
+    }
+
+    async sendPrivate() {
+        const addr = this.peerInfo.getAPIURL("/messaging/broadcast");
+
+        const ok = this.checkInputs(this.privateMessageTarget, this.privateRecipientsTarget);
+        if (!ok) {
+            return;
+        }
+
+        const destination = this.privateRecipientsTarget.value;
+        const message = this.privateMessageTarget.value;
+
+        const recipients = {};
+        destination.split(",").forEach(e => recipients[e.trim()] = {});
+
+        const msg = {
+            "Type": "private",
+            "payload": {
+                "Recipients": recipients,
+                "Msg": {
+                    "Type": "chat",
+                    "payload": {
+                        "Message": message
+                    }
+                }
+            }
+        };
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(msg)
+        };
+
+        try {
+            await this.fetch(addr, fetchArgs);
+            this.flash.printSuccess("private message sent");
+        } catch (e) {
+            this.flash.printError("failed to send message: " + e);
+        }
     }
 }
 
