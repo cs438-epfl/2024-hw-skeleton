@@ -33,6 +33,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	return n
 }
 
+// Custom Struct for handling both the routing table and its associated mutex
+// (less confusing than putting everything inside the node struct)
 type AsyncRoutingTable struct {
 	routingTable peer.RoutingTable
 	mutex        sync.RWMutex
@@ -57,6 +59,8 @@ func (n *node) Start() error {
 	n.stopChan = make(chan struct{})
 	n.wg.Add(1)
 
+	// Go routine that handles the receiving of packets
+	// And sending packets to other node using the aux function processPacket
 	go func() {
 		defer n.wg.Done()
 		for {
@@ -64,17 +68,20 @@ func (n *node) Start() error {
 			case <-n.stopChan:
 				return
 			default:
+				//Receive Packet
 				pkt, err := n.conf.Socket.Recv(time.Second * 1)
 				if errors.Is(err, transport.TimeoutError(0)) {
 					continue
 				}
 				if err != nil {
-					// Handle error (log it, for example)
+					// Handle error (log it, for example, might need something else later on)
 					log.Printf("Error receiving packet: %v", err)
 					continue
 				}
 
+				//Aux function to either relay packet or give it to current node if dest
 				err = n.processPacket(pkt)
+
 				if err != nil {
 					// Log the error
 					log.Printf("Error processing packet: %v", err)
@@ -102,6 +109,7 @@ func (n *node) Stop() error {
 	return nil
 }
 
+// processPacket is an aux function that processes a packet received by the node
 func (n *node) processPacket(pkt transport.Packet) error {
 	// Check if the packet is for this node
 	if pkt.Header.Destination == n.conf.Socket.GetAddress() {
@@ -118,11 +126,13 @@ func (n *node) processPacket(pkt transport.Packet) error {
 		return errors.New("unknown destination for relay")
 	}
 
+	//Create new Header, maybe try to modify the pointer directly ?
 	newHeader := transport.NewHeader(
 		pkt.Header.Source,
-		n.conf.Socket.GetAddress(),
+		n.conf.Socket.GetAddress(), //modify relayedBy field to the current node
 		pkt.Header.Destination,
 	)
+	//Create new packet with modified Header
 	pkt = transport.Packet{
 		Header: &newHeader,
 		Msg:    pkt.Msg,
@@ -132,6 +142,7 @@ func (n *node) processPacket(pkt transport.Packet) error {
 }
 
 func (n *node) Unicast(dest string, msg transport.Message) error {
+	//Read routing table from struct, with R/W protection
 	n.asyncRoutingTable.mutex.RLock()
 	nextHop, known := n.asyncRoutingTable.routingTable[dest]
 	n.asyncRoutingTable.mutex.RUnlock()
@@ -139,13 +150,14 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	if !known {
 		return errors.New("unknown destination")
 	}
-
+	//Make header, relay same as source for unicast
 	header := transport.NewHeader(
 		n.conf.Socket.GetAddress(),
 		n.conf.Socket.GetAddress(), // same as source?
 		dest,
 	)
 
+	//Create Packet
 	pkt := transport.Packet{
 		Header: &header,
 		Msg:    &msg,
@@ -168,6 +180,7 @@ func (n *node) AddPeer(addr ...string) {
 	n.asyncRoutingTable.mutex.Lock()
 	defer n.asyncRoutingTable.mutex.Unlock()
 
+	//Add all peers from Routing Table
 	for _, a := range addr {
 		if a != n.conf.Socket.GetAddress() {
 			n.asyncRoutingTable.routingTable[a] = a
@@ -180,6 +193,7 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 	n.asyncRoutingTable.mutex.RLock()
 	defer n.asyncRoutingTable.mutex.RUnlock()
 
+	//Copy routing table while R/W locked
 	routingTableCopy := make(peer.RoutingTable)
 	for k, v := range n.asyncRoutingTable.routingTable {
 		routingTableCopy[k] = v
@@ -192,6 +206,7 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 	n.asyncRoutingTable.mutex.Lock()
 	defer n.asyncRoutingTable.mutex.Unlock()
 
+	//Sets ROuting table Entries with relayAddr Param, R/W locked
 	if relayAddr == "" {
 		delete(n.asyncRoutingTable.routingTable, origin)
 	} else {

@@ -93,7 +93,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 			log.Printf("Error setting write deadline: %v", timeouErr)
 			return transport.TimeoutError(timeout)
 		}
-
+		//Unlimited Timeout
 	} else {
 		timeouErr := s.conn.SetWriteDeadline(time.Time{})
 		if timeouErr != nil {
@@ -112,7 +112,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	// Store the sent packet
+	// Store the sent packet in outs
 	s.mu.Lock()
 	s.outs = append(s.outs, pkt)
 	s.mu.Unlock()
@@ -124,7 +124,6 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 // the timeout is reached. In the case the timeout is reached, return a
 // TimeoutErr.
 func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
-
 	buf := make([]byte, bufSize)
 
 	// Set the read deadline
@@ -134,7 +133,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 			log.Printf("Error setting write deadline: %v", timeoutErr)
 			return transport.Packet{}, timeoutErr
 		}
-
+		//Unlimited Timeout
 	} else {
 		timeoutErr := s.conn.SetReadDeadline(time.Time{})
 		if timeoutErr != nil {
@@ -164,7 +163,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 		return transport.Packet{}, err
 	}
 
-	// Store the received packet
+	// Store the received packet in ins
 	s.mu.Lock()
 	s.ins = append(s.ins, pkt)
 	s.mu.Unlock()
