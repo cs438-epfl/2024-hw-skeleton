@@ -2,7 +2,6 @@ package impl
 
 import (
 	"errors"
-	"log"
 	"sync"
 	"time"
 
@@ -75,7 +74,6 @@ func (n *node) Start() error {
 				}
 				if err != nil {
 					// Handle error (log it, for example, might need something else later on)
-					log.Printf("Error receiving packet: %v", err)
 					continue
 				}
 
@@ -83,8 +81,8 @@ func (n *node) Start() error {
 				err = n.processPacket(pkt)
 
 				if err != nil {
-					// Log the error
-					log.Printf("Error processing packet: %v", err)
+					//Error handling for processPacket
+					continue
 				}
 
 			}
@@ -102,9 +100,6 @@ func (n *node) Stop() error {
 
 	// Wait for the goroutine to finish
 	n.wg.Wait()
-
-	// We can't close the socket directly, so we'll just log that we're stopping
-	log.Println("Node stopped")
 
 	return nil
 }
@@ -216,10 +211,10 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 
 // chatMessageCallback handles incoming ChatMessage
 func (n *node) chatMessageCallback(msg types.Message, pkt transport.Packet) error {
-	chatMsg, ok := msg.(*types.ChatMessage)
+	//First variable is chat msg, second is boolean
+	_, ok := msg.(*types.ChatMessage)
 	if !ok {
 		return errors.New("invalid message type")
 	}
-	log.Printf("Received chat message: %s", chatMsg.Message)
 	return nil
 }
