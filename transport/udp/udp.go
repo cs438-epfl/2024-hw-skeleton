@@ -7,17 +7,38 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"go.dedis.ch/cs438/transport"
 )
 
 // It is advised to define a constant (max) size all relevant byte buffers, e.g:
 const bufSize = 65000
 
-// Global logger function
-func logger(format string, v ...interface{}) {
-	if os.Getenv("GLOG") != "no" {
-		logger(format, v...)
+// Global logger configuration
+var (
+	defaultLevel = zerolog.InfoLevel
+	logout       = zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
 	}
+	logger zerolog.Logger
+)
+
+// Global logger function
+func init() {
+	// defaultLevel can be changed to set the desired level of the logger
+	defaultLevel = zerolog.InfoLevel
+
+	if os.Getenv("GLOG") != "no" {
+		defaultLevel = zerolog.Disabled
+	}
+
+	logger = zerolog.New(logout).
+		Level(defaultLevel).
+		With().Timestamp().Logger().
+		With().Caller().Logger().
+		With().Str("role", "peer node").Logger()
 }
 
 // NewUDP returns a new udp transport implementation.
@@ -95,16 +116,16 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 
 	// Set the write
 	if timeout > 0 {
-		timeouErr := s.conn.SetWriteDeadline(time.Now().Add(timeout))
-		if timeouErr != nil {
-			logger("Error setting write deadline: %v", timeouErr)
+		timeoutErr := s.conn.SetWriteDeadline(time.Now().Add(timeout))
+		if timeoutErr != nil {
+			logger.Error().Err(timeoutErr).Msg("Error setting write deadline: %v")
 			return transport.TimeoutError(timeout)
 		}
 		//Unlimited Timeout
 	} else {
-		timeouErr := s.conn.SetWriteDeadline(time.Time{})
-		if timeouErr != nil {
-			logger("Error setting write deadline: %v", timeouErr)
+		timeoutErr := s.conn.SetWriteDeadline(time.Time{})
+		if timeoutErr != nil {
+			logger.Error().Err(timeoutErr).Msg("Error setting write deadline: %v")
 			return transport.TimeoutError(timeout)
 		}
 	}
@@ -137,14 +158,14 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	if timeout > 0 {
 		timeoutErr := s.conn.SetReadDeadline(time.Now().Add(timeout))
 		if timeoutErr != nil {
-			logger("Error setting write deadline: %v", timeoutErr)
+			logger.Error().Err(timeoutErr).Msg("Error setting write deadline: %v")
 			return transport.Packet{}, timeoutErr
 		}
 		//Unlimited Timeout
 	} else {
 		timeoutErr := s.conn.SetReadDeadline(time.Time{})
 		if timeoutErr != nil {
-			logger("Error setting write deadline: %v", timeoutErr)
+			logger.Error().Err(timeoutErr).Msg("Error setting write deadline: %v")
 			return transport.Packet{}, timeoutErr
 		}
 	}
@@ -154,10 +175,10 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
-			logger("Recv timeout: %v", timeout)
+			logger.Error().Err(err).Msg("Recv Err ")
 			return transport.Packet{}, transport.TimeoutError(timeout)
 		}
-		logger("Recv error: %v", err)
+		logger.Error().Err(err).Msg("Recv Err ")
 		return transport.Packet{}, err
 	}
 
@@ -166,7 +187,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 
 	err = pkt.Unmarshal(buf[:n])
 	if err != nil {
-		logger("Unmarshal error: %v", err)
+		logger.Error().Err(err).Msg("Unmarshall Err ")
 		return transport.Packet{}, err
 	}
 

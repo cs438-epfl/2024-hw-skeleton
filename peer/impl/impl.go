@@ -2,21 +2,41 @@ package impl
 
 import (
 	"errors"
-	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 )
 
-// Global logger function
-func logger(format string, v ...interface{}) {
-	if os.Getenv("GLOG") != "no" {
-		log.Printf(format, v...)
+// Global logger configuration
+var (
+	defaultLevel = zerolog.InfoLevel
+	logout       = zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
 	}
+	logger zerolog.Logger
+)
+
+// Global logger function
+func init() {
+	// defaultLevel can be changed to set the desired level of the logger
+	defaultLevel = zerolog.InfoLevel
+
+	if os.Getenv("GLOG") != "no" {
+		defaultLevel = zerolog.Disabled
+	}
+
+	logger = zerolog.New(logout).
+		Level(defaultLevel).
+		With().Timestamp().Logger().
+		With().Caller().Logger().
+		With().Str("role", "peer node").Logger()
 }
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -83,8 +103,7 @@ func (n *node) Start() error {
 				}
 				if err != nil {
 					// Handle error (log it, for example, might need something else later on)
-					logger("Error receiving packet: %v", err)
-					continue
+					logger.Error().Err(err).Msg("Error receiving packet")
 				}
 
 				//Aux function to either relay packet or give it to current node if dest
@@ -92,7 +111,7 @@ func (n *node) Start() error {
 
 				if err != nil {
 					// Log the error
-					logger("Error receiving packet: %v", err)
+					logger.Error().Err(err).Msg("Error processing packet")
 				}
 
 			}
@@ -110,9 +129,6 @@ func (n *node) Stop() error {
 
 	// Wait for the goroutine to finish
 	n.wg.Wait()
-
-	// We can't close the socket directly, so we'll just log that we're stopping
-	logger("Node stopped")
 
 	return nil
 }
@@ -229,6 +245,6 @@ func (n *node) chatMessageCallback(msg types.Message, pkt transport.Packet) erro
 	if !ok {
 		return errors.New("invalid message type")
 	}
-	logger("Received chat message: %s", chatMsg.Message)
+	logger.Info().Str("message", chatMsg.Message).Msg("Received chat message")
 	return nil
 }
