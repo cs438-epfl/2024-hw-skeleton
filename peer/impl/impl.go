@@ -2,6 +2,8 @@ package impl
 
 import (
 	"errors"
+	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -9,6 +11,13 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 )
+
+// Global logger function
+func logger(format string, v ...interface{}) {
+	if os.Getenv("GLOG") != "no" {
+		log.Printf(format, v...)
+	}
+}
 
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
@@ -74,6 +83,7 @@ func (n *node) Start() error {
 				}
 				if err != nil {
 					// Handle error (log it, for example, might need something else later on)
+					logger("Error receiving packet: %v", err)
 					continue
 				}
 
@@ -81,8 +91,8 @@ func (n *node) Start() error {
 				err = n.processPacket(pkt)
 
 				if err != nil {
-					//Error handling for processPacket
-					continue
+					// Log the error
+					logger("Error receiving packet: %v", err)
 				}
 
 			}
@@ -100,6 +110,9 @@ func (n *node) Stop() error {
 
 	// Wait for the goroutine to finish
 	n.wg.Wait()
+
+	// We can't close the socket directly, so we'll just log that we're stopping
+	logger("Node stopped")
 
 	return nil
 }
@@ -212,9 +225,10 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 // chatMessageCallback handles incoming ChatMessage
 func (n *node) chatMessageCallback(msg types.Message, pkt transport.Packet) error {
 	//First variable is chat msg, second is boolean
-	_, ok := msg.(*types.ChatMessage)
+	chatMsg, ok := msg.(*types.ChatMessage)
 	if !ok {
 		return errors.New("invalid message type")
 	}
+	logger("Received chat message: %s", chatMsg.Message)
 	return nil
 }

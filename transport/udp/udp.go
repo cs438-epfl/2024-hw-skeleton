@@ -3,6 +3,7 @@ package udp
 import (
 	"errors"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -11,6 +12,13 @@ import (
 
 // It is advised to define a constant (max) size all relevant byte buffers, e.g:
 const bufSize = 65000
+
+// Global logger function
+func logger(format string, v ...interface{}) {
+	if os.Getenv("GLOG") != "no" {
+		logger(format, v...)
+	}
+}
 
 // NewUDP returns a new udp transport implementation.
 func NewUDP() transport.Transport {
@@ -89,12 +97,14 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	if timeout > 0 {
 		timeouErr := s.conn.SetWriteDeadline(time.Now().Add(timeout))
 		if timeouErr != nil {
+			logger("Error setting write deadline: %v", timeouErr)
 			return transport.TimeoutError(timeout)
 		}
 		//Unlimited Timeout
 	} else {
 		timeouErr := s.conn.SetWriteDeadline(time.Time{})
 		if timeouErr != nil {
+			logger("Error setting write deadline: %v", timeouErr)
 			return transport.TimeoutError(timeout)
 		}
 	}
@@ -127,12 +137,14 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	if timeout > 0 {
 		timeoutErr := s.conn.SetReadDeadline(time.Now().Add(timeout))
 		if timeoutErr != nil {
+			logger("Error setting write deadline: %v", timeoutErr)
 			return transport.Packet{}, timeoutErr
 		}
 		//Unlimited Timeout
 	} else {
 		timeoutErr := s.conn.SetReadDeadline(time.Time{})
 		if timeoutErr != nil {
+			logger("Error setting write deadline: %v", timeoutErr)
 			return transport.Packet{}, timeoutErr
 		}
 	}
@@ -142,8 +154,10 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
+			logger("Recv timeout: %v", timeout)
 			return transport.Packet{}, transport.TimeoutError(timeout)
 		}
+		logger("Recv error: %v", err)
 		return transport.Packet{}, err
 	}
 
@@ -152,6 +166,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 
 	err = pkt.Unmarshal(buf[:n])
 	if err != nil {
+		logger("Unmarshal error: %v", err)
 		return transport.Packet{}, err
 	}
 
