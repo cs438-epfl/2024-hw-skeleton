@@ -28,6 +28,18 @@ func (b binnode) Unicast(dest string, msg transport.Message) error {
 	return nil
 }
 
+// Broadcast implements peer.Messaging
+func (b binnode) Broadcast(msg transport.Message) error {
+	endpoint := "http://" + b.proxyAddr + "/messaging/broadcast"
+
+	_, err := b.postData(endpoint, msg)
+	if err != nil {
+		return xerrors.Errorf("failed to post data: %v", err)
+	}
+
+	return nil
+}
+
 // AddPeer implements peer.Messaging
 func (b binnode) AddPeer(addr ...string) {
 	endpoint := "http://" + b.proxyAddr + "/messaging/peers"

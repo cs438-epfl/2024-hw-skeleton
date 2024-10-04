@@ -124,6 +124,12 @@ type configTemplate struct {
 
 	withWatcher bool
 	autoStart   bool
+
+	AntiEntropyInterval time.Duration
+	HeartbeatInterval   time.Duration
+
+	AckTimeout        time.Duration
+	ContinueMongering float64
 }
 
 func newConfigTemplate() configTemplate {
@@ -135,6 +141,12 @@ func newConfigTemplate() configTemplate {
 		handlers: make([]registry.Exec, 0),
 
 		registry: standard.NewRegistry(),
+
+		AntiEntropyInterval: 0,
+		HeartbeatInterval:   0,
+
+		AckTimeout:        time.Second * 3,
+		ContinueMongering: 0.5,
 	}
 }
 
@@ -163,6 +175,34 @@ func WithMessageRegistry(r registry.Registry) Option {
 	}
 }
 
+// WithAntiEntropy specifies the antientropy interval.
+func WithAntiEntropy(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.AntiEntropyInterval = d
+	}
+}
+
+// WithHeartbeat defines the heartbeat interval.
+func WithHeartbeat(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.HeartbeatInterval = d
+	}
+}
+
+// WithContinueMongering sets the ContinueMongering option.
+func WithContinueMongering(c float64) Option {
+	return func(ct *configTemplate) {
+		ct.ContinueMongering = c
+	}
+}
+
+// WithAckTimeout sets the AckTimeout option.
+func WithAckTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.AckTimeout = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -179,6 +219,10 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 
 	config.Socket = socket
 	config.MessageRegistry = template.registry
+	config.AntiEntropyInterval = template.AntiEntropyInterval
+	config.HeartbeatInterval = template.HeartbeatInterval
+	config.ContinueMongering = template.ContinueMongering
+	config.AckTimeout = template.AckTimeout
 
 	node := f(config)
 
@@ -316,6 +360,54 @@ func GetChat(t *testing.T, msg *transport.Message) types.ChatMessage {
 	require.NoError(t, err)
 
 	return chatMessage
+}
+
+// GetRumor returns the rumor associated to the transport.Message.
+func GetRumor(t *testing.T, msg *transport.Message) types.RumorsMessage {
+	require.Equal(t, "rumor", msg.Type)
+
+	var rumor types.RumorsMessage
+
+	err := json.Unmarshal(msg.Payload, &rumor)
+	require.NoError(t, err)
+
+	return rumor
+}
+
+// GetAck returns the Ack associated to the transport.Message.
+func GetAck(t *testing.T, msg *transport.Message) types.AckMessage {
+	require.Equal(t, "ack", msg.Type)
+
+	var ack types.AckMessage
+
+	err := json.Unmarshal(msg.Payload, &ack)
+	require.NoError(t, err)
+
+	return ack
+}
+
+// GetStatus returns the Status associated to the transport.Message.
+func GetStatus(t *testing.T, msg *transport.Message) types.StatusMessage {
+	require.Equal(t, "status", msg.Type)
+
+	var status types.StatusMessage
+
+	err := json.Unmarshal(msg.Payload, &status)
+	require.NoError(t, err)
+
+	return status
+}
+
+// GetEmpty returns the EmptyMessage associated to the transport.Message.
+func GetEmpty(t *testing.T, msg *transport.Message) types.EmptyMessage {
+	require.Equal(t, "empty", msg.Type)
+
+	var emptyMessage types.EmptyMessage
+
+	err := json.Unmarshal(msg.Payload, &emptyMessage)
+	require.NoError(t, err)
+
+	return emptyMessage
 }
 
 // GetRandBytes returns random bytes.

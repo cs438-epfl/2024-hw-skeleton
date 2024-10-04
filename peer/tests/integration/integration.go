@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"testing"
 
 	"go.dedis.ch/cs438/internal/binnode"
 	"go.dedis.ch/cs438/peer"
@@ -40,6 +41,13 @@ func getPath() string {
 	}
 
 	return bin
+}
+
+// skipIfWIndows will skip a test if the detected Operating System is Windows
+func skipIfWIndows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("The Windows network stack makes this test fail erratically - please run this on a Linux system")
+	}
 }
 
 var udpFac transport.Factory = udp.NewUDP
