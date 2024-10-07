@@ -124,6 +124,101 @@
         </div>
     </div>
 
+    <div data-controller="catalog" class="catalog">
+        <h2 class="collapsible">Catalog</h2>
+
+        <div>
+            <div data-catalog-target="content" class="content">
+            </div>
+            <button data-action="click->catalog#update">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M13.5 2c-5.621 0-10.211 4.443-10.475 10h-3.025l5 6.625 5-6.625h-2.975c.257-3.351 3.06-6 6.475-6 3.584 0 6.5 2.916 6.5 6.5s-2.916 6.5-6.5 6.5c-1.863 0-3.542-.793-4.728-2.053l-2.427 3.216c1.877 1.754 4.389 2.837 7.155 2.837 5.79 0 10.5-4.71 10.5-10.5s-4.71-10.5-10.5-10.5z"/></svg>
+                Update catalog
+            </button>
+
+            <h3>Add catalog entry</h3>
+            <div class="add-catalog-entry">
+                <input data-catalog-target="key" name="key" type="text" placeholder="aef123..."/>
+                <input data-catalog-target="value" name="value" type="text" placeholder="127.0.0.1:0"/>
+                <button data-action="click->catalog#add">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                    Add catalog entry
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div data-controller="dataSharing" class="data">
+        <h2 class="collapsible">Data</h2>
+
+        <div>
+            <h3>Upload</h3>
+            <div data-dataSharing-target="uploadResult" class="upload-result"></div>
+            <input data-dataSharing-target="fileUpload" type="file">
+            <button data-action="click->dataSharing#upload">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                Upload data
+            </button>
+
+            <h3>Download</h3>
+            <input data-dataSharing-target="downloadMetahash" type="text" placeholder="metahash">
+            <button data-action="click->dataSharing#download">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                Download data
+            </button>
+        </div>
+    </div>
+
+    <div data-controller="search" class="search">
+        <h2 class="collapsible">Search</h2>
+
+        <div>
+            <h3>Search all</h3>
+            <div data-search-target="searchAllResult" class="search-all-result"></div>
+            <input data-search-target="searchAllPattern" name="pattern" type="type" placeholder="pattern (.*)">
+            <input data-search-target="searchAllBudget" name="budget" type="number" placeholder="budget (3)">
+            <input data-search-target="searchAllTimeout" name="timeout" type="type" placeholder="timeout (1s)">
+
+            <button data-action="click->search#searchAll">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                Search all
+            </button>
+
+            <h3>Search first</h3>
+            <div data-search-target="searchFirstResult" class="search-first-result"></div>
+            <input data-search-target="searchFirstPattern" name="pattern" type="type" placeholder="pattern (.*)">
+            <input data-search-target="searchFirstInitialBudget" name="budget" type="number" placeholder="initial budget (1)">
+            <input data-search-target="searchFirstFactor" name="factor" type="number" placeholder="factor (2)">
+            <input data-search-target="searchFirstRetry" name="retry" type="number" placeholder="retry (5)">
+            <input data-search-target="searchFirstTimeout" name="timeout" type="type" placeholder="timeout (1s)">
+
+            <button data-action="click->search#searchFirst">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                Search first
+            </button>
+        </div>
+    </div>
+
+    <div data-controller="naming" class="naming">
+        <h2 class="collapsible">Naming</h2>
+
+        <div>
+            <h3>Resolve a filename</h3>
+            <div data-naming-target="resolveResult" class="result"></div>
+            <input data-naming-target="resolveFilename" name="filename" type="text" placeholder="filename"/>
+            <button data-action="click->naming#resolve">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M13.5 2c-5.621 0-10.211 4.443-10.475 10h-3.025l5 6.625 5-6.625h-2.975c.257-3.351 3.06-6 6.475-6 3.584 0 6.5 2.916 6.5 6.5s-2.916 6.5-6.5 6.5c-1.863 0-3.542-.793-4.728-2.053l-2.427 3.216c1.877 1.754 4.389 2.837 7.155 2.837 5.79 0 10.5-4.71 10.5-10.5s-4.71-10.5-10.5-10.5z"/></svg>
+                Resolve
+            </button>
+
+            <h3>Tag a file</h3>
+            <input data-naming-target="tagFilename" name="filename" type="text" placeholder="filename"/>
+            <input data-naming-target="tagMetahash" name="metahash" type="text" placeholder="metahash (aef123...)"/>
+            <button data-action="click->naming#tag">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 10h-10v-10h-4v10h-10v4h10v10h4v-10h10z"/></svg>
+                Tag file
+            </button>
+        </div>
+    </div>
 
     <div data-controller="packets" class="packets-holder">
         <h2 class="active collapsible">Packets history</h2>

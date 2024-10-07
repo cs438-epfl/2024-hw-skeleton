@@ -112,6 +112,12 @@ func (b *binnode) Start() error {
 		"--acktimeout", b.conf.AckTimeout.String(),
 	}
 
+	// if this is a storage that uses the filesystem then we want to use it
+	fileStorage, ok := b.conf.Storage.(fileStorage)
+	if ok {
+		args = append(args, "--storagefolder", fileStorage.GetFolderPath())
+	}
+
 	cmd := exec.Command(b.binaryPath, args...)
 
 	// okOutput, writer := io.Pipe()
@@ -294,4 +300,8 @@ func (b binnode) postData(endpoint string, v interface{}) ([]byte, error) {
 	}
 
 	return content, nil
+}
+
+type fileStorage interface {
+	GetFolderPath() string
 }

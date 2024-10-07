@@ -66,6 +66,7 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	socketctrl := controller.NewSocketCtrl(conf.Socket, &log)
 	registryctrl := controller.NewRegistryCtrl(conf.MessageRegistry, &log)
 	servicectrl := controller.NewServiceCtrl(node, &log)
+	datasharingctrl := controller.NewDataSharing(node, &log)
 
 	mux.Handle("/messaging/peers", http.HandlerFunc(messagingctrl.PeerHandler()))
 	mux.Handle("/messaging/routing", http.HandlerFunc(messagingctrl.RoutingHandler()))
@@ -82,6 +83,14 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	mux.Handle("/registry/pktnotify", http.HandlerFunc(registryctrl.PktNotifyHandler()))
 
 	mux.Handle("/service/stop", http.HandlerFunc(servicectrl.ServiceStopHandler()))
+
+	mux.Handle("/datasharing/upload", http.HandlerFunc(datasharingctrl.UploadHandler()))
+	mux.Handle("/datasharing/download", http.HandlerFunc(datasharingctrl.DownloadHandler()))
+	// Tag() + Resolve()
+	mux.Handle("/datasharing/naming", http.HandlerFunc(datasharingctrl.NamingHandler()))
+	mux.Handle("/datasharing/catalog", http.HandlerFunc(datasharingctrl.CatalogHandler()))
+	mux.Handle("/datasharing/searchAll", http.HandlerFunc(datasharingctrl.SearchAllHandler()))
+	mux.Handle("/datasharing/searchFirst", http.HandlerFunc(datasharingctrl.SearchFirstHandler()))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authorized", http.StatusBadGateway)

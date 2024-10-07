@@ -19,6 +19,10 @@ const main = function () {
     application.register("routing", Routing);
     application.register("packets", Packets);
     application.register("broadcast", Broadcast);
+    application.register("catalog", Catalog);
+    application.register("dataSharing", DataSharing);
+    application.register("search", Search);
+    application.register("naming", Naming);
 
     initCollapsible();
 };
@@ -508,3 +512,323 @@ class Broadcast extends BaseElement {
     }
 }
 
+class Catalog extends BaseElement {
+    static get targets() {
+        return ["content", "key", "value"];
+    }
+
+    initialize() {
+        this.update();
+    }
+
+    async update() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/catalog");
+
+        try {
+            const resp = await this.fetch(addr);
+            const data = await resp.json();
+
+            this.contentTarget.innerHTML = "";
+
+            // Expected format of data:
+            //
+            // {
+            //     "chunk1": {
+            //         "peerA": {}, "peerB": {},
+            //     },
+            //     "chunk2": {...},
+            // }
+
+            if (Object.keys(data).length === 0) {
+                this.contentTarget.innerHTML = "<i>no elements</i>";
+                this.flash.printSuccess("Catalog updated, nothing found");
+                return;
+            }
+
+            for (const [chunk, peersBag] of Object.entries(data)) {
+                const entry = document.createElement("div");
+                const chunkName = document.createElement("p");
+                chunkName.innerHTML = chunk;
+
+                entry.appendChild(chunkName);
+
+                for (var peer in peersBag) {
+                    const peerEl = document.createElement("p");
+                    peerEl.innerHTML = peer;
+                    entry.appendChild(peerEl);
+                }
+
+                this.contentTarget.appendChild(entry);
+            }
+
+            this.flash.printSuccess("Catalog updated");
+        } catch (e) {
+            this.flash.printError("Failed to fetch catalog: " + e);
+        }
+    }
+
+    async add() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/catalog");
+
+        const ok = this.checkInputs(this.keyTarget, this.valueTarget);
+        if (!ok) {
+            return;
+        }
+
+        const key = this.keyTarget.value;
+        const value = this.valueTarget.value;
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify([key, value])
+        };
+
+        try {
+            await this.fetch(addr, fetchArgs);
+            this.update();
+        } catch (e) {
+            this.flash.printError("failed to add catalog entry: " + e);
+        }
+    }
+}
+
+class DataSharing extends BaseElement {
+    static get targets() {
+        return ["uploadResult", "fileUpload", "downloadMetahash"];
+    }
+
+    async upload() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/upload");
+
+        const fileList = this.fileUploadTarget.files;
+
+        if (fileList.length == 0) {
+            this.flash.printError("No file found");
+            return;
+        }
+
+        const file = fileList[0];
+
+        const reader = new FileReader();
+        reader.addEventListener('load', async (event) => {
+            const result = event.target.result;
+
+            const fetchArgs = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "multipart/form-data"
+                },
+                body: result
+            };
+
+            try {
+                const resp = await this.fetch(addr, fetchArgs);
+                const text = await resp.text();
+
+                this.flash.printSuccess(`data uploaded, metahash: ${text}`);
+                this.uploadResultTarget.innerHTML = `Metahash: ${text}`;
+            } catch (e) {
+                this.flash.printError("failed to upload data: " + e);
+            }
+        });
+
+        reader.addEventListener('progress', (event) => {
+            if (event.loaded && event.total) {
+                const percent = (event.loaded / event.total) * 100;
+                this.flash.printSuccess(`File upload progress: ${Math.round(percent)}`);
+            }
+        });
+        reader.readAsArrayBuffer(file);
+    }
+
+    async download() {
+        const ok = this.checkInputs(this.downloadMetahashTarget);
+        if (!ok) {
+            return;
+        }
+
+        const metahash = this.downloadMetahashTarget.value;
+
+        const addr = this.peerInfo.getAPIURL("/datasharing/download?key=" + metahash);
+
+        try {
+            const resp = await this.fetch(addr);
+            const blob = await resp.blob();
+
+            this.triggerDownload(metahash, blob);
+            this.flash.printSuccess("Data downloaded!");
+        } catch (e) {
+            this.flash.printError("Failed to download data: " + e);
+        }
+    }
+
+    triggerDownload(metahash, blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.style.display = "none";
+        a.href = url;
+        a.download = metahash;
+        document.body.appendChild(a);
+
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+}
+
+class Search extends BaseElement {
+    static get targets() {
+        return ["searchAllResult", "searchAllPattern", "searchAllBudget", "searchAllTimeout",
+            "searchFirstResult", "searchFirstPattern", "searchFirstInitialBudget",
+            "searchFirstFactor", "searchFirstRetry", "searchFirstTimeout"];
+    }
+
+    async searchAll() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/searchAll");
+
+        const ok = this.checkInputs(this.searchAllPatternTarget,
+            this.searchAllBudgetTarget, this.searchAllTimeoutTarget);
+        if (!ok) {
+            return;
+        }
+
+        const pattern = this.searchAllPatternTarget.value;
+        const budget = this.searchAllBudgetTarget.value;
+        const timeout = this.searchAllTimeoutTarget.value;
+
+        const pkt = {
+            "Pattern": pattern,
+            "Budget": parseInt(budget),
+            "Timeout": timeout
+        };
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "multipart/form-data"
+            },
+            body: JSON.stringify(pkt)
+        };
+
+        try {
+            this.searchAllResultTarget.innerHTML = `<i>searching all...</i>`;
+
+            const resp = await this.fetch(addr, fetchArgs);
+            const text = await resp.text();
+
+            this.flash.printSuccess(`SearchAll done, result: ${text}`);
+            this.searchAllResultTarget.innerHTML = `Names: ${text}`;
+        } catch (e) {
+            this.flash.printError("failed to searchAll: " + e);
+        }
+    }
+
+    async searchFirst() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/searchFirst");
+
+        const ok = this.checkInputs(this.searchFirstPatternTarget, this.searchFirstInitialBudgetTarget,
+            this.searchFirstFactorTarget, this.searchFirstRetryTarget, this.searchFirstTimeoutTarget);
+        if (!ok) {
+            return;
+        }
+
+        const pattern = this.searchFirstPatternTarget.value;
+        const initial = this.searchFirstInitialBudgetTarget.value;
+        const factor = this.searchFirstFactorTarget.value;
+        const retry = this.searchFirstRetryTarget.value;
+        const timeout = this.searchFirstTimeoutTarget.value;
+
+        const pkt = {
+            "Pattern": pattern,
+            "Initial": parseInt(initial),
+            "Factor": parseInt(factor),
+            "Retry": parseInt(retry),
+            "Timeout": timeout
+        };
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "multipart/form-data"
+            },
+            body: JSON.stringify(pkt)
+        };
+
+        try {
+            this.searchFirstResultTarget.innerHTML = `<i>searching first...</i>`;
+
+            const resp = await this.fetch(addr, fetchArgs);
+            const text = await resp.text();
+
+            this.flash.printSuccess(`Search done, result: ${text}`);
+            if (text == "") {
+                this.searchFirstResultTarget.innerHTML = "<i>Nothing found</i>";
+            } else {
+                this.searchFirstResultTarget.innerHTML = `Names: ${text}`;
+            }
+
+            this.flash.printSuccess(`search first done, result: ${text}`);
+        } catch (e) {
+            this.flash.printError("failed to Search first: " + e);
+        }
+    }
+}
+
+class Naming extends BaseElement {
+    static get targets() {
+        return ["resolveResult", "resolveFilename", "tagFilename", "tagMetahash"];
+    }
+
+    async resolve() {
+        this.checkInputs(this.resolveFilenameTarget);
+
+        const filename = this.resolveFilenameTarget.value;
+
+        const addr = this.peerInfo.getAPIURL("/datasharing/naming?name=" + filename);
+
+        try {
+            const resp = await this.fetch(addr);
+            const text = await resp.text();
+
+            if (text == "") {
+                this.resolveResultTarget.innerHTML = "<i>nothing found</i>";
+            } else {
+                this.resolveResultTarget.innerHTML = text;
+            }
+
+            this.flash.printSuccess("filename resolved");
+        } catch (e) {
+            this.flash.printError("Failed to resolve filename: " + e);
+        }
+    }
+
+    async tag() {
+        const addr = this.peerInfo.getAPIURL("/datasharing/naming");
+
+        const ok = this.checkInputs(this.tagFilenameTarget, this.tagMetahashTarget);
+        if (!ok) {
+            return;
+        }
+
+        const filename = this.tagFilenameTarget.value;
+        const metahash = this.tagMetahashTarget.value;
+
+        const fetchArgs = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify([filename, metahash])
+        };
+
+        try {
+            await this.fetch(addr, fetchArgs);
+            this.flash.printSuccess("tagging done");
+        } catch (e) {
+            this.flash.printError("failed to tag filename: " + e);
+        }
+    }
+}

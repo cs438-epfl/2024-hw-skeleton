@@ -2,6 +2,7 @@ package peer
 
 import (
 	"go.dedis.ch/cs438/registry"
+	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"time"
 )
@@ -11,6 +12,7 @@ import (
 type Peer interface {
 	Service
 	Messaging
+	DataSharing
 }
 
 // Factory is the type of function we are using to create new instances of
@@ -48,4 +50,27 @@ type Configuration struct {
 	// is a 50% chance, and 0 no chance.
 	// Default: 0.5
 	ContinueMongering float64
+
+	// ChunkSize defines the size of chunks when storing data.
+	// Default: 8192
+	ChunkSize uint
+
+	// Backoff parameters used for DataRequests.
+	// Default: {2s 2 5}
+	BackoffDataRequest Backoff
+
+	Storage storage.Storage
+}
+
+// Backoff describes parameters for a backoff algorithm. The initial time must
+// be multiplied by "factor" a maximum of "retry" time.
+//
+//	for i := 0; i < retry; i++ {
+//	  wait(initial)
+//	  initial *= factor
+//	}
+type Backoff struct {
+	Initial time.Duration
+	Factor  uint
+	Retry   uint
 }

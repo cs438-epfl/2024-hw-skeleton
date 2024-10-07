@@ -1,0 +1,58 @@
+name: HW2_performance
+
+on:
+  push
+
+jobs:
+  test:
+    runs-on:
+      group: runners_v1
+    steps:
+      - name: Use Go = 1.23
+        uses: actions/setup-go@v3
+        with:
+          go-version: "=1.23"
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Install gotestfmt on the VM running the action.
+      - name: Set up gotestfmt
+        uses: gotesttools/gotestfmt-action@v2
+        with:
+          # Pass GITHUB_TOKEN to avoid rate limiting.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create temp directory
+        run: |
+          mkdir -p ./${{ github.run_attempt }}
+
+      - name: Test HW2 Performance
+        if: always()
+        run: |
+          set -euo pipefail
+          make test_bench_hw2 2>&1 | tee ./${{ github.run_attempt }}/goperf-hw2.log | gotestfmt
+        env:
+          GLOG: no
+          BINLOG: no
+          HTTPLOG: no
+          JSONIFY: "-json"
+
+      # Upload formatted logs
+      - name: Upload HW2 performance test log
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-test-hw2-log
+          path: ./${{ github.run_attempt }}/goperf-hw2.log
+          if-no-files-found: error
+

@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"os"
 
+	"os/signal"
 	"strconv"
 	"sync"
 	"time"
@@ -77,6 +78,7 @@ func main() {
 		Message: "What do you want to do ?",
 		Options: []string{
 			"💬 Send a chat message",
+			"🏷 Tag something",
 			"👉 exit",
 		},
 	}
@@ -95,6 +97,11 @@ func main() {
 			err = chat(peers)
 			if err != nil {
 				log.Fatalf("failed to chat: %v", err)
+			}
+		case "🏷 Tag something":
+			err = tag(peers)
+			if err != nil {
+				log.Fatalf("failed to tag: %v", err)
 			}
 		case "👉 exit":
 			fmt.Println("bye 👋")
@@ -189,6 +196,80 @@ func chat(peers []z.TestNode) error {
 	err = peers[answers.PeerID].Unicast(answers.Recipient, transpMsg)
 	if err != nil {
 		return xerrors.Errorf("failed to unicast: %v", err)
+	}
+
+	return nil
+}
+
+func tag(peers []z.TestNode) error {
+	answers := struct {
+		PeerID   uint
+		Tag      string
+		Metahash string
+	}{}
+
+	peerIDValidator := func(ans interface{}) error {
+		str, _ := ans.(string)
+
+		peerID, err := strconv.Atoi(str)
+		if err != nil || peerID < 0 || peerID >= len(peers) {
+			return xerrors.Errorf("please enter a number 0 < N < %d", len(peers))
+		}
+
+		return nil
+	}
+
+	err := survey.Ask([]*survey.Question{
+		{
+			Name:     "peerID",
+			Prompt:   &survey.Input{Message: fmt.Sprintf("Enter the peedID, from 0 to %d", len(peers)-1)},
+			Validate: peerIDValidator,
+		},
+		{
+			Name:   "tag",
+			Prompt: &survey.Input{Message: "Enter the tag name"},
+		},
+		{
+			Name:   "metahash",
+			Prompt: &survey.Input{Message: "Enter the metahash"},
+		},
+	}, &answers)
+
+	if err != nil {
+		return xerrors.Errorf("failed to get the answers: %v", err)
+	}
+
+	fmt.Printf("Tag %q for metahash %q on Peer n°%d\n", answers.Tag, answers.Metahash, answers.PeerID)
+
+	var confirm bool
+
+	err = survey.AskOne(&survey.Confirm{Message: "Confirm?"}, &confirm)
+	if err != nil {
+		return xerrors.Errorf("failed to get the confirmation: %v", err)
+	}
+
+	if !confirm {
+		fmt.Println("abort")
+		return nil
+	}
+
+	done := make(chan struct{})
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	go func() {
+		defer close(done)
+		err = peers[answers.PeerID].Tag(answers.Tag, answers.Metahash)
+		if err != nil {
+			fmt.Printf("failed to tag: %v\n", err)
+		}
+	}()
+
+	select {
+	case <-done:
+		fmt.Println("tagged!")
+	case <-c:
+		fmt.Println("cancel")
 	}
 
 	return nil

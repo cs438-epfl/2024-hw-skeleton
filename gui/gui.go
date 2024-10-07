@@ -16,6 +16,10 @@ import (
 	"go.dedis.ch/cs438/peer/impl"
 	"go.dedis.ch/cs438/registry/standard"
 
+	"go.dedis.ch/cs438/storage"
+	"go.dedis.ch/cs438/storage/file"
+	"go.dedis.ch/cs438/storage/inmemory"
+
 	"go.dedis.ch/cs438/transport/udp"
 	"golang.org/x/xerrors"
 )
@@ -100,6 +104,31 @@ func main() {
 						// mongering.
 						Value: 0.5,
 					},
+					&urfave.StringFlag{
+						Name:  "storagefolder",
+						Usage: "folder that will store peer's data. If not set will use in-memory storage",
+						Value: "",
+					},
+					&urfave.UintFlag{
+						Name:  "chunksize",
+						Usage: "Size of chunks, in bytes",
+						Value: 8192,
+					},
+					&urfave.DurationFlag{
+						Name:  "backoffinitial",
+						Usage: "Initial time for the backoff strategy",
+						Value: time.Second * 2,
+					},
+					&urfave.UintFlag{
+						Name:  "backofffactor",
+						Usage: "Factor value for the backoff strategy",
+						Value: 2,
+					},
+					&urfave.UintFlag{
+						Name:  "backoffretry",
+						Usage: "Retry value for the backoff strategy",
+						Value: 5,
+					},
 				},
 				Action: start,
 			},
@@ -139,6 +168,17 @@ func start(c *urfave.Context) error {
 		return xerrors.Errorf("failed to write socket address file: %v", err)
 	}
 
+	var storage storage.Storage
+
+	if c.String("storagefolder") == "" {
+		storage = inmemory.NewPersistency()
+	} else {
+		storage, err = file.NewPersistency(c.String("storagefolder"))
+		if err != nil {
+			log.Fatal().Msgf("failed to create file storage: %v", err)
+		}
+	}
+
 	conf := peer.Configuration{
 		Socket:          sock,
 		MessageRegistry: standard.NewRegistry(),
@@ -147,6 +187,14 @@ func start(c *urfave.Context) error {
 		HeartbeatInterval:   c.Duration("heartbeat"),
 		AckTimeout:          c.Duration("acktimeout"),
 		ContinueMongering:   c.Float64("continuemongering"),
+
+		ChunkSize: c.Uint("chunksize"),
+		BackoffDataRequest: peer.Backoff{
+			Initial: c.Duration("backoffinitial"),
+			Factor:  c.Uint("backofffactor"),
+			Retry:   c.Uint("backoffretry"),
+		},
+		Storage: storage,
 	}
 
 	node := peerFactory(conf)
