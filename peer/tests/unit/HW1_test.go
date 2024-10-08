@@ -303,7 +303,7 @@ func Test_HW1_Messaging_Heartbeat(t *testing.T) {
 	defer node2.Stop()
 
 	// As soon as node1 has a peer, it should send to that peer an empty rumor
-	// every 50 ms.
+	// every 500 ms.
 	node1.AddPeer(node2.GetAddr())
 
 	// If we wait only 800 ms, then node1 should send only one empty rumor to
