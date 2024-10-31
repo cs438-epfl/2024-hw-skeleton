@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -110,6 +111,9 @@ func (b *binnode) Start() error {
 		"--antientropy", b.conf.AntiEntropyInterval.String(),
 		"--heartbeat", b.conf.HeartbeatInterval.String(),
 		"--acktimeout", b.conf.AckTimeout.String(),
+		"--totalpeers", strconv.Itoa(int(b.conf.TotalPeers)),
+		"--paxosid", strconv.Itoa(int(b.conf.PaxosID)),
+		"--paxosproposerretry", b.conf.PaxosProposerRetry.String(),
 	}
 
 	// if this is a storage that uses the filesystem then we want to use it

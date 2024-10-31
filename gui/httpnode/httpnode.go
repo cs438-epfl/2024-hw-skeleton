@@ -67,6 +67,7 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	registryctrl := controller.NewRegistryCtrl(conf.MessageRegistry, &log)
 	servicectrl := controller.NewServiceCtrl(node, &log)
 	datasharingctrl := controller.NewDataSharing(node, &log)
+	blockchain := controller.NewBlockchain(conf, &log)
 
 	mux.Handle("/messaging/peers", http.HandlerFunc(messagingctrl.PeerHandler()))
 	mux.Handle("/messaging/routing", http.HandlerFunc(messagingctrl.RoutingHandler()))
@@ -91,6 +92,8 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	mux.Handle("/datasharing/catalog", http.HandlerFunc(datasharingctrl.CatalogHandler()))
 	mux.Handle("/datasharing/searchAll", http.HandlerFunc(datasharingctrl.SearchAllHandler()))
 	mux.Handle("/datasharing/searchFirst", http.HandlerFunc(datasharingctrl.SearchFirstHandler()))
+
+	mux.Handle("/blockchain", http.HandlerFunc(blockchain.BlockchainHandler()))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authorized", http.StatusBadGateway)

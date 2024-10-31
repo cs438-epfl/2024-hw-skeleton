@@ -129,6 +129,21 @@ func main() {
 						Usage: "Retry value for the backoff strategy",
 						Value: 5,
 					},
+					&urfave.UintFlag{
+						Name:  "totalpeers",
+						Usage: "Total number of peers (needed for Paxos)",
+						Value: 1,
+					},
+					&urfave.UintFlag{
+						Name:  "paxosid",
+						Usage: "The peer's paxos id. Must stat at 1. Can be 0 if total peers <= 1.",
+						Value: 0,
+					},
+					&urfave.DurationFlag{
+						Name:  "paxosproposerretry",
+						Usage: "The timeout after which a paxos proposer retries",
+						Value: time.Second * 5,
+					},
 				},
 				Action: start,
 			},
@@ -178,6 +193,12 @@ func start(c *urfave.Context) error {
 			log.Fatal().Msgf("failed to create file storage: %v", err)
 		}
 	}
+	totalPeers := c.Uint("totalpeers")
+	paxosID := c.Uint("paxosid")
+
+	if totalPeers > 1 && paxosID == 0 {
+		return xerrors.Errorf("if total peers is set PaxosID must be set, too")
+	}
 
 	conf := peer.Configuration{
 		Socket:          sock,
@@ -195,6 +216,13 @@ func start(c *urfave.Context) error {
 			Retry:   c.Uint("backoffretry"),
 		},
 		Storage: storage,
+
+		TotalPeers: totalPeers,
+		PaxosThreshold: func(u uint) int {
+			return int(u/2 + 1)
+		},
+		PaxosID:            paxosID,
+		PaxosProposerRetry: c.Duration("paxosproposerretry"),
 	}
 
 	node := peerFactory(conf)

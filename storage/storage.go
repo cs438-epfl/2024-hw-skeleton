@@ -13,6 +13,9 @@ type Storage interface {
 	// GetNamingStore returns a storage to store the names mapping. The
 	// storage must use tags/filenames as key, and metahashes as values.
 	GetNamingStore() Store
+
+	// GetBlockchainStore returns a storage to store the blockchain blocks.
+	GetBlockchainStore() Store
 }
 
 // Store describes the primitives of a simple storage.

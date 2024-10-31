@@ -49,6 +49,8 @@ func main() {
 	opts := []z.Option{
 		z.WithAckTimeout(time.Second * 30),
 		z.WithHeartbeat(0),
+		z.WithTotalPeers(uint(numPeers)),
+		z.WithPaxosProposerRetry(time.Second * 60),
 	}
 
 	wg := sync.WaitGroup{}
@@ -58,6 +60,7 @@ func main() {
 		go func(i int) {
 			defer wg.Done()
 			antiEntropyOpt := z.WithAntiEntropy(time.Second * time.Duration(5+rand.Intn(5)))
+			opts := append(opts, z.WithPaxosID(uint(i+1)))
 			opts = append(opts, antiEntropyOpt)
 			node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", opts...)
 

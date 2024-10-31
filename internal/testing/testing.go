@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"time"
 
+	"crypto/sha256"
+	"encoding/hex"
+
 	"encoding/json"
 	"fmt"
 
+	"io"
 	"math/rand"
 
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -139,6 +144,11 @@ type configTemplate struct {
 	storage storage.Storage
 
 	dataRequestBackoff peer.Backoff
+
+	totalPeers         uint
+	paxosThreshold     func(uint) int
+	paxosID            uint
+	paxosProposerRetry time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -166,6 +176,13 @@ func newConfigTemplate() configTemplate {
 			Factor:  2,
 			Retry:   5,
 		},
+
+		totalPeers: 1,
+		paxosThreshold: func(u uint) int {
+			return int(u/2 + 1)
+		},
+		paxosID:            0,
+		paxosProposerRetry: time.Second * 5,
 	}
 }
 
@@ -247,6 +264,34 @@ func WithStorage(storage storage.Storage) Option {
 	}
 }
 
+// WithTotalPeers sets a specific TotalPeer value.
+func WithTotalPeers(t uint) Option {
+	return func(ct *configTemplate) {
+		ct.totalPeers = t
+	}
+}
+
+// WithPaxosID sets a specific paxosID value.
+func WithPaxosID(id uint) Option {
+	return func(ct *configTemplate) {
+		ct.paxosID = id
+	}
+}
+
+// WithPaxosThreshold sets a specific paxosID value.
+func WithPaxosThreshold(f func(uint) int) Option {
+	return func(ct *configTemplate) {
+		ct.paxosThreshold = f
+	}
+}
+
+// WithPaxosProposerRetry sets a specific paxosID value.
+func WithPaxosProposerRetry(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.paxosProposerRetry = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -270,6 +315,10 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.Storage = template.storage
 	config.ChunkSize = template.chunkSize
 	config.BackoffDataRequest = template.dataRequestBackoff
+	config.TotalPeers = template.totalPeers
+	config.PaxosThreshold = template.paxosThreshold
+	config.PaxosID = template.paxosID
+	config.PaxosProposerRetry = template.paxosProposerRetry
 
 	node := f(config)
 
@@ -508,6 +557,171 @@ func GetSearchReply(t *testing.T, msg *transport.Message) types.SearchReplyMessa
 	require.NoError(t, err)
 
 	return searchReplyMessage
+}
+
+// GetRumorWithSequence returns the transport.Message embedded in the rumor at the provided
+// sequence.
+func GetRumorWithSequence(t *testing.T, pkts []transport.Packet, sequence uint) (*transport.Message, *transport.Header) {
+	for _, pkt := range pkts {
+		if pkt.Msg.Type == "rumor" {
+			rumor := GetRumor(t, pkt.Msg)
+
+			// a broadcast only have one rumor
+			if len(rumor.Rumors) == 1 {
+				if rumor.Rumors[0].Sequence == sequence {
+					return rumor.Rumors[0].Msg, pkt.Header
+				}
+			}
+		}
+	}
+	return nil, nil
+}
+
+// GetPaxosPrepare returns the PaxosPrepare associated to the transport.Message.
+func GetPaxosPrepare(t *testing.T, msg *transport.Message) types.PaxosPrepareMessage {
+	require.Equal(t, "paxosprepare", msg.Type)
+
+	var paxosPrepareMessage types.PaxosPrepareMessage
+
+	err := json.Unmarshal(msg.Payload, &paxosPrepareMessage)
+	require.NoError(t, err)
+
+	return paxosPrepareMessage
+}
+
+// GetPaxosPromise returns the PaxosPromise associated to the transport.Message.
+func GetPaxosPromise(t *testing.T, msg *transport.Message) types.PaxosPromiseMessage {
+	require.Equal(t, "paxospromise", msg.Type)
+
+	var paxosPromiseMessage types.PaxosPromiseMessage
+
+	err := json.Unmarshal(msg.Payload, &paxosPromiseMessage)
+	require.NoError(t, err)
+
+	return paxosPromiseMessage
+}
+
+// GetPaxosPropose returns the PaxosPropose associated to the transport.Message.
+func GetPaxosPropose(t *testing.T, msg *transport.Message) types.PaxosProposeMessage {
+	require.Equal(t, "paxospropose", msg.Type)
+
+	var paxosProposeMessage types.PaxosProposeMessage
+
+	err := json.Unmarshal(msg.Payload, &paxosProposeMessage)
+	require.NoError(t, err)
+
+	return paxosProposeMessage
+}
+
+// GetPaxosAccept returns the PaxosAccept associated to the transport.Message.
+func GetPaxosAccept(t *testing.T, msg *transport.Message) types.PaxosAcceptMessage {
+	require.Equal(t, "paxosaccept", msg.Type)
+
+	var paxosAcceptMessage types.PaxosAcceptMessage
+
+	err := json.Unmarshal(msg.Payload, &paxosAcceptMessage)
+	require.NoError(t, err)
+
+	return paxosAcceptMessage
+}
+
+// GetTLC returns the TLC associated to the transport.Message.
+func GetTLC(t *testing.T, msg *transport.Message) types.TLCMessage {
+	require.Equal(t, "tlc", msg.Type)
+
+	var tlcMessage types.TLCMessage
+
+	err := json.Unmarshal(msg.Payload, &tlcMessage)
+	require.NoError(t, err)
+
+	return tlcMessage
+}
+
+// GetPrivate returns the Private message associated to the transport.Message.
+func GetPrivate(t *testing.T, msg *transport.Message) types.PrivateMessage {
+	require.Equal(t, "private", msg.Type)
+
+	var privateMessage types.PrivateMessage
+
+	err := json.Unmarshal(msg.Payload, &privateMessage)
+	require.NoError(t, err)
+
+	return privateMessage
+}
+
+// DisplayBlokchainBlocks writes a string representation of all blocks store in
+// the storage.
+func DisplayBlokchainBlocks(t *testing.T, out io.Writer, store storage.Store) {
+	lastBlockHashHex := hex.EncodeToString(store.Get(storage.LastBlockKey))
+	endBlockHasHex := hex.EncodeToString(make([]byte, 32))
+
+	for lastBlockHashHex != endBlockHasHex {
+		lastBlockBuf := store.Get(string(lastBlockHashHex))
+
+		var lastBlock types.BlockchainBlock
+
+		err := lastBlock.Unmarshal(lastBlockBuf)
+		require.NoError(t, err)
+
+		lastBlock.DisplayBlock(out)
+
+		lastBlockHashHex = hex.EncodeToString(lastBlock.PrevHash)
+	}
+}
+
+// DisplayLastBlockchainBlock writes the string representation of the last
+// blockchain block.
+func DisplayLastBlockchainBlock(t *testing.T, out io.Writer, store storage.Store) {
+	lastBlockHashHex := hex.EncodeToString(store.Get(storage.LastBlockKey))
+	lastBlockBuf := store.Get(string(lastBlockHashHex))
+
+	var lastBlock types.BlockchainBlock
+
+	err := lastBlock.Unmarshal(lastBlockBuf)
+	require.NoError(t, err)
+
+	lastBlock.DisplayBlock(out)
+}
+
+// ValidateBlockchain parses the whole blockchain and checks the hash of each
+// block.
+func ValidateBlockchain(t *testing.T, store storage.Store) {
+	lastBlockHashHex := hex.EncodeToString(store.Get(storage.LastBlockKey))
+
+	endBlockHasHex := hex.EncodeToString(make([]byte, 32))
+	var block types.BlockchainBlock
+
+	for lastBlockHashHex != endBlockHasHex {
+		lastBlockBuf := store.Get(string(lastBlockHashHex))
+
+		err := block.Unmarshal(lastBlockBuf)
+		require.NoError(t, err)
+
+		h := sha256.New()
+
+		h.Write([]byte(strconv.Itoa(int(block.Index))))
+		h.Write([]byte(block.Value.Filename))
+		h.Write([]byte(block.Value.Metahash))
+		h.Write(block.PrevHash)
+
+		blockHash := h.Sum(nil)
+
+		require.Equal(t, blockHash, block.Hash)
+
+		lastBlockHashHex = hex.EncodeToString(block.PrevHash)
+	}
+
+	require.Equal(t, uint(0), block.Index)
+}
+
+// MustDecode decodes an hex string and panic if it fails
+func MustDecode(hexStr string) []byte {
+	buff, err := hex.DecodeString(hexStr)
+	if err != nil {
+		panic("failed to decode: " + err.Error())
+	}
+
+	return buff
 }
 
 // GetRandBytes returns random bytes.

@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	blob   = "blob"
-	naming = "naming"
+	blob       = "blob"
+	naming     = "naming"
+	blockchain = "blockchain"
 )
 
 // NewPersistency return a new initialized file-based storage. Opeartions are
@@ -33,10 +34,16 @@ func NewPersistency(folderPath string) (storage.Storage, error) {
 		return nil, xerrors.Errorf("failed to create namingStore: %v", err)
 	}
 
+	blockchainStore, err := newStore(filepath.Join(folderPath, blockchain))
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create blockchainStore: %v", err)
+	}
+
 	return Storage{
 		folderPath: folderPath,
 		blob:       blobStore,
 		naming:     namingStore,
+		blockchain: blockchainStore,
 	}, nil
 }
 
@@ -46,8 +53,9 @@ func NewPersistency(folderPath string) (storage.Storage, error) {
 type Storage struct {
 	folderPath string
 
-	blob   storage.Store
-	naming storage.Store
+	blob       storage.Store
+	naming     storage.Store
+	blockchain storage.Store
 }
 
 // GetFolderPath returns the folder path
@@ -63,6 +71,11 @@ func (s Storage) GetDataBlobStore() storage.Store {
 // GetNamingStore implements storage.Storage
 func (s Storage) GetNamingStore() storage.Store {
 	return s.naming
+}
+
+// GetBlockchainStore implements storage.Storage
+func (s Storage) GetBlockchainStore() storage.Store {
+	return s.blockchain
 }
 
 func newStore(folderPath string) (*store, error) {

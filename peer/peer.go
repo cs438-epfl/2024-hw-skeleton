@@ -60,6 +60,25 @@ type Configuration struct {
 	BackoffDataRequest Backoff
 
 	Storage storage.Storage
+
+	// TotalPeers is the total number of peers in Peerster. If it is <= 1 then
+	// there is no use of Paxos/TLC/Blockchain.
+	// Default: 1
+	TotalPeers uint
+
+	// PaxosThreshold is a function that return the threshold of peers needed to
+	// have a consensus. Default value is N/2 + 1
+	PaxosThreshold func(uint) int
+
+	// PaxosID is the starting ID of a Paxos proposer. It is distributed from 1
+	// to peers.
+	// Default: 0
+	PaxosID uint
+
+	// PaxosProposerRetry is the amount of time a proposer waits before it
+	// retries to send a prepare when it doesn't get enough promises or accepts.
+	// Default: 5s.
+	PaxosProposerRetry time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
